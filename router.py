@@ -22,21 +22,20 @@ def login():
 
     try:
         auth = get_auth_connection()
-        cur = auth.cursor(as_dict=True)
-        # Note: If as_dict=True is unsupported by your pyodbc version, use a custom fetcher
+        cur = auth.cursor()
         cur.execute("SELECT Username, PasswordHash, Role FROM SystemUsers WHERE Username = ?", (username,))
         row = cur.fetchone()
         
         if not row:
-            # Simple fallback for first-time setup or if as_dict=True fails
-            cur.execute("SELECT Username, PasswordHash, Role FROM SystemUsers WHERE Username = ?", (username,))
-            res = cur.fetchone()
-            if not res:
-                return jsonify({"status": "error", "msg": "Invalid username or password"}), 401
-            # Res is a tuple (Username, PasswordHash, Role)
-            user_data = {"Username": res[0], "PasswordHash": res[1], "Role": res[2]}
-        else:
-            user_data = row
+            return jsonify({"status": "error", "msg": "Invalid username or password"}), 401
+            
+        # pyodbc returns a row object that can be accessed by index or name (if using Row object)
+        # But to be safe across versions, we map it to a dict
+        user_data = {
+            "Username": row[0],
+            "PasswordHash": row[1],
+            "Role": row[2]
+        }
 
         if check_password_hash(user_data['PasswordHash'], password):
             return jsonify({
