@@ -52,7 +52,10 @@ def setup_auth():
                        (username, hashed, "Admin"))
             print("User added successfully!")
         else:
-            print("User already exists.")
+            print(f"Updating password for user: {username}")
+            cur.execute("UPDATE SystemUsers SET PasswordHash = ?, Role = ? WHERE Username = ?", 
+                       (hashed, "Admin", username))
+            print("Password updated successfully.")
             
         print("✅ Auth setup complete.")
         conn.close()

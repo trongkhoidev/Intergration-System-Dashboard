@@ -25,7 +25,7 @@ sleep 1
 
 echo "📦 Starting Backend Server (Flask)..."
 # Start backend in background
-python app.py &
+./.venv/bin/python app.py &
 BACKEND_PID=$!
 
 echo "⚛️ Starting Frontend Server (React)..."
