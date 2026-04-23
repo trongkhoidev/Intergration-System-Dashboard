@@ -4,7 +4,9 @@ import AddEmployeeModal from "../components/AddEmployeeModal";
 import ExportModal from "../components/ExportModal";
 import Skeleton, { TableSkeleton } from "../components/Skeleton";
 import EmptyState from "../components/EmptyState";
-import { API_BASE } from "../api";
+import { API_BASE, fetchAuth } from "../api";
+import { getCurrentUser } from "../utils/auth";
+import { getStatusPresentation } from "../utils/status";
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
@@ -19,6 +21,9 @@ export default function Employees() {
   
   const [departments, setDepartments] = useState([]);
   const [positions, setPositions] = useState([]);
+  
+  const user = getCurrentUser();
+  const canEdit = ['admin', 'hr'].includes(user.normalizedRole);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -30,7 +35,7 @@ export default function Employees() {
 
   const loadEmployees = useCallback(() => {
     setLoading(true);
-    fetch(`${API_BASE}/employees`)
+    fetchAuth(`${API_BASE}/employees`)
       .then((res) => res.json())
       .then((data) => {
         setEmployees(Array.isArray(data) ? data : []);
@@ -45,12 +50,16 @@ export default function Employees() {
 
   const loadFilters = useCallback(() => {
     Promise.all([
-      fetch(`${API_BASE}/departments`).then(res => res.json()),
-      fetch(`${API_BASE}/positions`).then(res => res.json())
+      fetchAuth(`${API_BASE}/departments`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/positions`).then(res => res.json())
     ]).then(([depts, posts]) => {
-      setDepartments(depts);
-      setPositions(posts);
-    }).catch(err => console.error("Error loading dropdown data:", err));
+      setDepartments(Array.isArray(depts) ? depts : []);
+      setPositions(Array.isArray(posts) ? posts : []);
+    }).catch(err => {
+      console.error("Error loading dropdown data:", err);
+      setDepartments([]);
+      setPositions([]);
+    });
   }, []);
 
   useEffect(() => {
@@ -66,7 +75,7 @@ export default function Employees() {
   const confirmDelete = () => {
     if (!deleteTarget) return;
 
-    fetch(`${API_BASE}/employees/${deleteTarget.id}`, {
+    fetchAuth(`${API_BASE}/employees/${deleteTarget.id}`, {
       method: "DELETE",
     })
       .then((res) => res.json())
@@ -164,9 +173,11 @@ export default function Employees() {
             <button onClick={() => setIsExportModalOpen(true)} className="btn btn-white border px-3 shadow-sm d-flex align-items-center gap-2 fw-bold">
                 <i className="bi bi-arrow-up-right-circle text-primary"></i> Export
             </button>
-            <button onClick={() => setIsAddModalOpen(true)} className="btn btn-primary-custom px-3 shadow-sm fw-bold">
-                <i className="bi bi-plus-lg me-1"></i> Add Member
-            </button>
+            {canEdit && (
+              <button onClick={() => setIsAddModalOpen(true)} className="btn btn-primary-custom px-3 shadow-sm fw-bold">
+                  <i className="bi bi-plus-lg me-1"></i> Add Member
+              </button>
+            )}
         </div>
       </div>
 
@@ -194,6 +205,7 @@ export default function Employees() {
             <option value="">All Statuses</option>
             <option value="Active">Active</option>
             <option value="On Leave">On Leave</option>
+            <option value="Probation">Probation</option>
             <option value="Inactive">Inactive</option>
           </select>
         </div>
@@ -232,19 +244,24 @@ export default function Employees() {
                       </div>
                     </td>
                     <td>
-                      <span className={`badge-custom ${emp.Status === 'Active' ? 'badge-active' : emp.Status === 'On Leave' ? 'badge-leave' : 'badge-inactive'}`}>
-                        {emp.Status || 'Active'}
-                      </span>
+                      {(() => {
+                        const status = getStatusPresentation(emp.Status);
+                        return <span className={`badge-custom ${status.className}`}>{status.label}</span>;
+                      })()}
                     </td>
                     <td className="text-end">
-                      <div className="d-flex justify-content-end gap-1">
-                        <Link to={`/employees/${emp.EmployeeID}`} className="btn-icon" title="Edit Profile">
-                          <i className="bi bi-pencil-square"></i>
-                        </Link>
-                        <button className="btn-icon text-danger" onClick={() => setDeleteTarget({ id: emp.EmployeeID, name: emp.FullName })} title="Delete records">
-                          <i className="bi bi-trash3-fill"></i>
-                        </button>
-                      </div>
+                      {canEdit ? (
+                        <div className="d-flex justify-content-end gap-1">
+                          <Link to={`/employees/${emp.EmployeeID}`} className="btn-icon" title="Edit Profile">
+                            <i className="bi bi-pencil-square"></i>
+                          </Link>
+                          <button className="btn-icon text-danger" onClick={() => setDeleteTarget({ id: emp.EmployeeID, name: emp.FullName })} title="Delete records">
+                            <i className="bi bi-trash3-fill"></i>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-muted extra-small">View only</span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -2,15 +2,18 @@ import { useState, useEffect } from 'react';
 import AlertDetailPanel from '../components/AlertDetailPanel';
 import Skeleton, { TableSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
-import { API_BASE } from '../api';
+import { API_BASE, fetchAuth } from '../api';
+import { getCurrentUser } from '../utils/auth';
 
 export default function Alerts() {
+  const user = getCurrentUser();
+  const canCreateAlert = ['admin', 'hr'].includes(user.normalizedRole);
   const [alerts, setAlerts] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/alerts`)
+    fetchAuth(`${API_BASE}/alerts`)
       .then(res => res.json())
       .then(data => {
         setAlerts(data);
@@ -33,7 +36,11 @@ export default function Alerts() {
           <h2 className="fw-bold text-dark mb-1 tracking-tight">System Notifications</h2>
           <p className="text-muted small mb-0">Monitor high-priority anomalies and workforce milestones.</p>
         </div>
-        <button className="btn btn-primary-custom px-4 shadow-sm fw-bold"><i className="bi bi-shield-plus me-1"></i> New Protocol</button>
+        {canCreateAlert && (
+          <button className="btn btn-primary-custom px-4 shadow-sm fw-bold">
+            <i className="bi bi-shield-plus me-1"></i> New Protocol
+          </button>
+        )}
       </div>
 
       <div className="table-container p-0 border-0 shadow-sm glass-card animate-slide-up shadow-sm">

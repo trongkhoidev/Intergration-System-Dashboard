@@ -5,8 +5,9 @@ import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
 import ExportModal from '../components/ExportModal';
 import Skeleton from '../components/Skeleton';
-import { API_BASE } from '../api';
+import { API_BASE, fetchAuth } from '../api';
 import { generateMonthOptions } from '../utils/dateUtils';
+import { getStatusPresentation } from '../utils/status';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -31,12 +32,12 @@ export default function Dashboard() {
     const monthParam = selectedMonth !== 'All Months' ? `?month=${encodeURIComponent(selectedMonth)}` : '';
     
     Promise.all([
-      fetch(`${API_BASE}/dashboard/stats${monthParam}`).then(res => res.json()),
-      fetch(`${API_BASE}/dashboard/performance${monthParam}`).then(res => res.json()),
-      fetch(`${API_BASE}/payroll/summary${monthParam}`).then(res => res.json()),
-      fetch(`${API_BASE}/dashboard/status-overview${monthParam}`).then(res => res.json()),
-      fetch(`${API_BASE}/employees`).then(res => res.json()),
-      fetch(`${API_BASE}/alerts`).then(res => res.json())
+      fetchAuth(`${API_BASE}/dashboard/stats${monthParam}`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/dashboard/performance${monthParam}`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/payroll/summary${monthParam}`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/dashboard/status-overview${monthParam}`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/employees`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/alerts`).then(res => res.json())
     ])
     .then(([statsData, perf, pay, status, employees, alertData]) => {
       setStats(statsData || { totalEmployees: 0, payrollTotal: 0, attendanceRate: 0 });
@@ -273,7 +274,10 @@ export default function Dashboard() {
                       </td>
                       <td><span className="text-muted small">{emp.Department}</span></td>
                       <td>
-                        <span className="badge-custom badge-active">Active</span>
+                        {(() => {
+                          const status = getStatusPresentation(emp.Status);
+                          return <span className={`badge-custom ${status.className}`}>{status.label}</span>;
+                        })()}
                       </td>
                     </tr>
                   ))}

@@ -3,7 +3,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import ChartCard from '../components/ChartCard';
 import ExportModal from '../components/ExportModal';
 import Skeleton from '../components/Skeleton';
-import { API_BASE } from '../api';
+import { API_BASE, fetchAuth } from '../api';
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('HR');
@@ -25,16 +25,21 @@ export default function Reports() {
 
   const loadHRData = useCallback(async () => {
     try {
-        const [stats, status] = await Promise.all([
-            fetch(`${API_BASE}/dashboard/stats`).then(res => res.json()),
-            fetch(`${API_BASE}/dashboard/status-overview`).then(res => res.json())
+        const [hrDist] = await Promise.all([
+            fetchAuth(`${API_BASE}/reports/hr`).then(res => res.json())
         ]);
+        const statuses = hrDist.reduce((acc, curr) => {
+             acc[curr.Status] = (acc[curr.Status] || 0) + curr.Count;
+             return acc;
+        }, {});
+        const total = hrDist.reduce((acc, curr) => acc + curr.Count, 0);
+
         setData(prev => ({
             ...prev,
             hr: {
-                bar: { labels: ['Active Workforce'], datasets: [{ label: 'Operational Members', data: [stats.totalEmployees || 0], backgroundColor: '#4f46e5', borderRadius: 12 }] },
-                donut: { labels: Object.keys(status || {}), datasets: [{ data: Object.values(status || {}), backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#4f46e5'], borderWidth: 0 }] },
-                table: [ { metric: 'Total Identified Talent', value: stats.totalEmployees || 0 }, { metric: 'Avg Presence Rate', value: `${stats.attendanceRate}%` }, { metric: 'Unique Status Segments', value: Object.keys(status || {}).length } ]
+                bar: { labels: ['Active Workforce'], datasets: [{ label: 'Operational Members', data: [total], backgroundColor: '#4f46e5', borderRadius: 12 }] },
+                donut: { labels: Object.keys(statuses), datasets: [{ data: Object.values(statuses), backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#4f46e5'], borderWidth: 0 }] },
+                table: [ { metric: 'Total Identified Talent', value: total }, { metric: 'Unique Status Segments', value: Object.keys(statuses).length } ]
             }
         }));
     } catch (e) { console.error(e); }
@@ -42,17 +47,18 @@ export default function Reports() {
 
   const loadPayrollData = useCallback(async () => {
     try {
-        const [history, summary] = await Promise.all([
-            fetch(`${API_BASE}/payroll`).then(res => res.json()),
-            fetch(`${API_BASE}/payroll/summary`).then(res => res.json())
+        const [history] = await Promise.all([
+            fetchAuth(`${API_BASE}/reports/payroll`).then(res => res.json())
         ]);
-        const last6 = (history || []).slice(0, 6).reverse();
+        const last6 = (history || []).slice(-6);
+        const totalPayroll = history.reduce((acc, curr) => acc + curr.TotalNet, 0);
+        const avgPayroll = history.length ? totalPayroll / history.length : 0;
         setData(prev => ({
             ...prev,
             payroll: {
-                line: { labels: last6.map(h => h.MonthYear), datasets: [{ label: 'Net Inflow', data: last6.map(h => h.TotalSalary), borderColor: '#4f46e5', fill: true, backgroundColor: 'rgba(79, 70, 229, 0.1)', tension: 0.4 }] },
-                bar: { labels: summary.Breakdown?.map(b => b.DepartmentID) || [], datasets: [{ label: 'Sector Distribution', data: summary.Breakdown?.map(b => b.Amount) || [], backgroundColor: '#10b981', borderRadius: 8 }] },
-                table: [ { metric: 'Cumulative Payroll', value: `$${summary.TotalPayroll?.toLocaleString() || 0}` }, { metric: 'Median Compensation', value: `$${summary.AvgSalary?.toLocaleString() || 0}` }, { metric: 'Sectors Audit', value: summary.Breakdown?.length || 0 } ]
+                line: { labels: last6.map(h => h.Month), datasets: [{ label: 'Net Inflow', data: last6.map(h => h.TotalNet), borderColor: '#4f46e5', fill: true, backgroundColor: 'rgba(79, 70, 229, 0.1)', tension: 0.4 }] },
+                bar: { labels: last6.map(h => h.Month), datasets: [{ label: 'Deductions', data: last6.map(h => h.TotalDeductions), backgroundColor: '#ef4444', borderRadius: 8 }] },
+                table: [ { metric: 'Cumulative Payroll', value: `$${totalPayroll.toLocaleString()}` }, { metric: 'Median Compensation', value: `$${avgPayroll.toLocaleString()}` } ]
             }
         }));
     } catch (e) { console.error(e); }

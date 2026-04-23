@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { getCurrentUser } from '../utils/auth';
 
 export default function Header() {
   const [notifications] = useState([
@@ -8,9 +9,8 @@ export default function Header() {
     { id: 3, title: 'Security Patch Deployment', time: '1d ago', icon: 'bi-shield-lock-fill', color: 'text-warning' }
   ]);
   
-  const userString = localStorage.getItem('user');
-  const user = userString ? JSON.parse(userString) : { username: 'Guest', role: 'user' };
-  const displayName = user.username === 'Admin' ? 'Olivia Chen' : user.username;
+  const user = getCurrentUser();
+  const displayName = user.username || 'Guest';
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,6 +21,7 @@ export default function Header() {
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
     navigate('/');
   };
 
@@ -98,7 +99,7 @@ export default function Header() {
           <ul className="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-3 p-2 glass-card" style={{ borderRadius: '16px', minWidth: '220px' }}>
             <li className="px-3 py-3 border-bottom mb-2">
                <div className="fw-bold text-dark">{displayName}</div>
-               <div className="text-muted extra-small">{user.role?.toLowerCase() === 'admin' ? 'Admin' : 'User'} Authority</div>
+               <div className="text-muted extra-small text-capitalize">{user.normalizedRole} Authority</div>
             </li>
             <li>
               <Link className="dropdown-item fw-bold py-2 rounded-3 d-flex align-items-center gap-3" to="/profile">

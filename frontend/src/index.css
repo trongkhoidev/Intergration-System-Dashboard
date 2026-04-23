@@ -232,6 +232,8 @@ body {
 .badge-active { background-color: var(--success-bg); color: var(--success-text); }
 .badge-inactive { background-color: var(--border-color); color: var(--text-muted); }
 .badge-leave { background-color: var(--warning-bg); color: var(--warning-text); }
+.badge-probation { background-color: var(--info-bg); color: var(--info-text); }
+.badge-neutral { background-color: #eef2ff; color: #4338ca; }
 
 /* Truncation */
 .text-truncate-custom {

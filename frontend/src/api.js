@@ -1,2 +1,29 @@
 export const API_BASE = "http://localhost:5001/api";
 export const APP_URL = "http://localhost:5001";
+
+// Wrapper around fetch that automatically includes JWT token
+export const fetchAuth = async (url, options = {}) => {
+  const token = localStorage.getItem('token');
+  const headers = {
+    ...options.headers,
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(url, { ...options, headers });
+  
+  // If unauthorized, auto-logout
+  if (response.status === 401) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/';
+  }
+  
+  return response;
+};

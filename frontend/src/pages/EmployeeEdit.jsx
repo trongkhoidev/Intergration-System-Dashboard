@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { API_BASE } from "../api";
+import { API_BASE, fetchAuth } from "../api";
 
 export default function EmployeeEdit() {
   const nav = useNavigate();
@@ -43,12 +43,17 @@ export default function EmployeeEdit() {
   };
 
   const loadDropdowns = useCallback(() => {
-    fetch(`${API_BASE}/departments`).then(res => res.json()).then(data => setDepartments(data)).catch(() => {});
-    fetch(`${API_BASE}/positions`).then(res => res.json()).then(data => setPositions(data)).catch(() => {});
+    Promise.all([
+      fetchAuth(`${API_BASE}/departments`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/positions`).then(res => res.json())
+    ]).then(([depts, posts]) => {
+      setDepartments(depts);
+      setPositions(posts);
+    }).catch(() => {});
   }, []);
 
   const loadEmployee = useCallback(() => {
-    fetch(`${API_BASE}/employees/${id}`)
+    fetchAuth(`${API_BASE}/employees/${id}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.msg === "Employee not found") {
@@ -76,7 +81,7 @@ export default function EmployeeEdit() {
   const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
-    fetch(`${API_BASE}/employees/${id}`, {
+    fetchAuth(`${API_BASE}/employees/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
