@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { API_BASE } from '../api';
 
 export default function Login() {
@@ -27,14 +28,15 @@ export default function Login() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         })
-        .then(res => res.json())
-        .then(data => {
+        .then(res => res.json().then(data => ({ status: res.status, data })))
+        .then(({ status, data }) => {
             setLoading(false);
             if (data.status === 'success') {
+                localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
                 window.location.href = '/';
             } else {
-                setError(data.msg || 'Invalid username or password');
+                setError(data.msg || 'Invalid credentials');
                 setShake(true);
             }
         })
@@ -93,7 +95,7 @@ export default function Login() {
 
                     <form onSubmit={handleLogin}>
                         <div className="mb-4">
-                            <label className="form-label fw-bold text-muted small text-uppercase" style={{ letterSpacing: '0.05em' }}>Username</label>
+                            <label className="form-label fw-bold text-muted small text-uppercase" style={{ letterSpacing: '0.05em' }}>Email / Username</label>
                             <div className="position-relative">
                                 <i className={`bi bi-person position-absolute top-50 translate-middle-y ms-3 ${error ? 'text-danger' : 'text-muted'}`}></i>
                                 <input
@@ -108,9 +110,9 @@ export default function Login() {
                         </div>
 
                         <div className="mb-4">
-                            <div className="d-flex justify-content-between align-items-center">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
                                 <label className="form-label fw-bold text-muted small text-uppercase mb-0" style={{ letterSpacing: '0.05em' }}>Password</label>
-                                <a href="#" className="small text-decoration-none fw-medium" style={{ color: 'var(--primary-color)' }}>Forgot password?</a>
+                                <Link to="/forgot-password" className="small text-decoration-none fw-medium" style={{ color: 'var(--primary-color)' }}>Forgot password?</Link>
                             </div>
                             <div className="position-relative mt-2">
                                 <i className={`bi bi-lock position-absolute top-50 translate-middle-y ms-3 ${error ? 'text-danger' : 'text-muted'}`}></i>
@@ -151,13 +153,19 @@ export default function Login() {
                     </form>
 
                     <div className="mt-5 text-center p-3 rounded" style={{ backgroundColor: 'var(--secondary-color)', border: '1px dashed var(--border-color)' }}>
-                        <p className="small text-muted mb-2 fw-bold text-uppercase" style={{ letterSpacing: '0.05em' }}>Test Credentials:</p>
-                        <div className="d-flex justify-content-center gap-4">
+                        <p className="small text-muted mb-2 fw-bold text-uppercase" style={{ letterSpacing: '0.05em' }}>Test Credentials (password: 123456):</p>
+                        <div className="d-flex justify-content-center gap-2 flex-wrap">
                             <span className="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
-                                <i className="bi bi-shield-lock text-primary me-2"></i>admin / 123456
+                                <i className="bi bi-shield-lock text-primary me-1"></i>admin
                             </span>
                             <span className="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
-                                <i className="bi bi-person text-secondary me-2"></i>user / 123456
+                                <i className="bi bi-person text-success me-1"></i>hr_manager
+                            </span>
+                            <span className="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
+                                <i className="bi bi-cash text-warning me-1"></i>payroll_manager
+                            </span>
+                            <span className="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
+                                <i className="bi bi-person text-secondary me-1"></i>employee
                             </span>
                         </div>
                     </div>

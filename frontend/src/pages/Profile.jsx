@@ -1,18 +1,28 @@
-import { useState } from 'react';
-import { API_BASE } from '../api';
+import { useEffect, useState } from 'react';
+import { API_BASE, fetchAuth } from '../api';
+import { getCurrentUser } from '../utils/auth';
+import { getStatusPresentation } from '../utils/status';
 
 export default function Profile() {
-  const userString = localStorage.getItem('user');
-  const user = userString ? JSON.parse(userString) : { username: 'Guest', role: 'user' };
-  const displayName = user.username === 'Admin' ? 'Olivia Chen' : user.username;
+  const user = getCurrentUser();
   
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [profileData, setProfileData] = useState(null);
+  const displayName = profileData?.FullName || user.username;
+
+  useEffect(() => {
+    fetchAuth(`${API_BASE}/profile`)
+      .then(res => res.json())
+      .then(data => setProfileData(data))
+      .catch(err => console.error(err));
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
     window.location.href = '/';
   };
 
@@ -24,7 +34,7 @@ export default function Profile() {
     }
     
     setLoading(true);
-    fetch(`${API_BASE}/password`, {
+    fetchAuth(`${API_BASE}/password`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -65,7 +75,7 @@ export default function Profile() {
              <h2 className="fw-bold text-dark mb-1 tracking-tight">{displayName}</h2>
              <div className="d-flex align-items-center gap-2">
                 <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-1 fw-bold text-uppercase small">
-                    {user.role?.toLowerCase() === 'admin' ? 'System Administrator' : 'Staff Member'}
+                    {user.normalizedRole === 'admin' ? 'System Administrator' : 'Staff Member'}
                 </span>
                 <span className="text-muted small fw-medium">@{user.username.toLowerCase()}</span>
              </div>
@@ -92,15 +102,40 @@ export default function Profile() {
                     </div>
                     <div className="col-md-6">
                        <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Corporate Communication</label>
-                       <div className="h5 fw-bold text-dark text-lowercase">{user.username}@integration.internal</div>
+                       <div className="h5 fw-bold text-dark text-lowercase">{profileData?.Email || `${user.username}@integration.internal`}</div>
                     </div>
                     <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Network Node ID</label>
-                       <div className="h5 fw-bold text-dark">SI-NODE-{user.role === 'admin' ? '0X7F' : '0X4A'}</div>
+                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Structural Unit</label>
+                       <div className="h5 fw-bold text-dark">{profileData?.Department || 'N/A'} - {profileData?.Position || 'N/A'}</div>
                     </div>
                     <div className="col-md-6">
                        <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Access Permissions</label>
-                       <div className="h5 fw-bold text-primary">Priority Level {user.role === 'admin' ? '9 - Administrative' : '3 - Operational'}</div>
+                       <div className="h5 fw-bold text-primary">Role: {user.role}</div>
+                    </div>
+                    <div className="col-md-6">
+                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Phone Number</label>
+                       <div className="h5 fw-bold text-dark">{profileData?.PhoneNumber || 'Not Provided'}</div>
+                    </div>
+                    <div className="col-md-6">
+                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Gender</label>
+                       <div className="h5 fw-bold text-dark">{profileData?.Gender || 'N/A'}</div>
+                    </div>
+                    <div className="col-md-6">
+                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Date of Birth</label>
+                       <div className="h5 fw-bold text-dark">{profileData?.DateOfBirth || 'N/A'}</div>
+                    </div>
+                    <div className="col-md-6">
+                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Hire Date</label>
+                       <div className="h5 fw-bold text-dark">{profileData?.HireDate || 'N/A'}</div>
+                    </div>
+                    <div className="col-md-6">
+                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Employment Status</label>
+                       <div className="h5 fw-bold text-dark">
+                          {(() => {
+                            const status = getStatusPresentation(profileData?.Status);
+                            return <span className={`badge-custom ${status.className}`}>{status.label}</span>;
+                          })()}
+                       </div>
                     </div>
                  </div>
               </div>

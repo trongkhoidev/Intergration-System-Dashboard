@@ -5,8 +5,9 @@ import ChartCard from '../components/ChartCard';
 import ExportModal from '../components/ExportModal';
 import Skeleton, { TableSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
-import { API_BASE } from '../api';
+import { API_BASE, fetchAuth } from '../api';
 import { generateMonthOptions } from '../utils/dateUtils';
+import { getStatusPresentation } from '../utils/status';
 
 export default function Attendance() {
   const [attendanceData, setAttendanceData] = useState([]);
@@ -19,7 +20,7 @@ export default function Attendance() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE}/attendance?month=${encodeURIComponent(selectedMonth)}`)
+    fetchAuth(`${API_BASE}/attendance?month=${encodeURIComponent(selectedMonth)}`)
       .then(res => res.json())
       .then(data => {
         setAttendanceData(Array.isArray(data) ? data : []);
@@ -129,7 +130,12 @@ export default function Attendance() {
                 {filteredData.map((a, i) => (
                   <tr key={i}>
                     <td className="fw-bold text-dark">{a.FullName}</td>
-                    <td><span className={`badge-custom ${a.Status === 'Active' ? 'badge-active' : 'badge-inactive'}`}>{a.Status}</span></td>
+                    <td>
+                      {(() => {
+                        const status = getStatusPresentation(a.Status);
+                        return <span className={`badge-custom ${status.className}`}>{status.label}</span>;
+                      })()}
+                    </td>
                     <td>{a.WorkDays} / 22 <span className="text-muted extra-small">Days</span></td>
                     <td>
                       <div className="d-flex gap-2">

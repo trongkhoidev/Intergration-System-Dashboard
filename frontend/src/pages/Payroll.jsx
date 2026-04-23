@@ -5,7 +5,7 @@ import ChartCard from '../components/ChartCard';
 import ExportModal from '../components/ExportModal';
 import Skeleton, { TableSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
-import { API_BASE } from '../api';
+import { API_BASE, fetchAuth } from '../api';
 import { generateMonthOptions } from '../utils/dateUtils';
 
 export default function Payroll() {
@@ -22,8 +22,8 @@ export default function Payroll() {
     setLoading(true);
     const monthQuery = selectedMonth !== 'All Months' ? `?month=${encodeURIComponent(selectedMonth)}` : '';
     Promise.all([
-      fetch(`${API_BASE}/payroll${monthQuery}`).then(res => res.json()),
-      fetch(`${API_BASE}/payroll/summary${monthQuery}`).then(res => res.json())
+      fetchAuth(`${API_BASE}/payroll${monthQuery}`).then(res => res.json()),
+      fetchAuth(`${API_BASE}/payroll/summary${monthQuery}`).then(res => res.json())
     ]).then(([data, summ]) => {
       setPayrollData(Array.isArray(data) ? data : []);
       setSummary(summ && !summ.error ? summ : { TotalPayroll: 0, AvgSalary: 0 });

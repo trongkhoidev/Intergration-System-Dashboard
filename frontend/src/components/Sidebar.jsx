@@ -1,26 +1,33 @@
 import { Link, useLocation } from "react-router-dom";
+import { getCurrentUser } from "../utils/auth";
 
 export default function Sidebar() {
   const location = useLocation();
-  const userString = localStorage.getItem('user');
-  const user = userString ? JSON.parse(userString) : { username: 'Guest', role: 'user' };
-  const isAdmin = user.role?.toLowerCase() === 'admin';
-  const displayName = user.username === 'Admin' ? 'Olivia Chen' : user.username;
+  const user = getCurrentUser();
+  const role = user.normalizedRole;
+  const displayName = user.username || 'User';
 
-  const managementLinks = [
-    { path: "/", label: "Dashboard", icon: "bi-grid-1x2-fill" },
-    { path: "/employees", label: "Talent Directory", icon: "bi-people-fill" },
-  ];
+  // RBAC Sidebar menus per role
+  const allLinks = {
+    management: [
+      { path: "/", label: "Dashboard", icon: "bi-grid-1x2-fill", roles: ["admin", "hr", "payroll"] },
+      { path: "/employees", label: "Employees", icon: "bi-people-fill", roles: ["admin", "hr"] },
+    ],
+    operations: [
+      { path: "/payroll", label: "Payroll", icon: "bi-bank2", roles: ["admin", "hr", "payroll"] },
+      { path: "/attendance", label: "Attendance", icon: "bi-calendar2-range-fill", roles: ["admin", "hr", "payroll"] },
+    ],
+    intelligence: [
+      { path: "/reports", label: "Reports", icon: "bi-file-earmark-medical-fill", roles: ["admin", "hr", "payroll"] },
+      { path: "/alerts", label: "Alerts", icon: "bi-shield-fill-exclamation", roles: ["admin", "hr", "payroll"] },
+    ],
+    administration: [
+      { path: "/users", label: "System Identities", icon: "bi-person-lines-fill", roles: ["admin"] },
+      { path: "/audit-logs", label: "Audit Logs", icon: "bi-journal-code", roles: ["admin"] },
+    ]
+  };
 
-  const operationalLinks = [
-    { path: "/payroll", label: "Financial Registry", icon: "bi-bank2" },
-    { path: "/attendance", label: "Presence Logs", icon: "bi-calendar2-range-fill" },
-  ];
-
-  const systemLinks = [
-    { path: "/reports", label: "Audit Reports", icon: "bi-file-earmark-medical-fill" },
-    { path: "/alerts", label: "System Alerts", icon: "bi-shield-fill-exclamation" },
-  ];
+  const filterByRole = (links) => links.filter(l => l.roles.includes(role));
 
   const renderLink = (link) => {
     const isActive = location.pathname === link.path || 
@@ -40,6 +47,20 @@ export default function Sidebar() {
     );
   };
 
+  const mgmt = filterByRole(allLinks.management);
+  const ops = filterByRole(allLinks.operations);
+  const intel = filterByRole(allLinks.intelligence);
+  const adminLinks = filterByRole(allLinks.administration);
+  const hasAnyLinks = mgmt.length > 0 || ops.length > 0 || intel.length > 0 || adminLinks.length > 0;
+
+  const roleBadge = {
+    admin: { label: "Admin", color: "text-primary" },
+    hr: { label: "HR Manager", color: "text-success" },
+    payroll: { label: "Payroll Manager", color: "text-warning" },
+    employee: { label: "Employee", color: "text-secondary" },
+  };
+  const badge = roleBadge[role] || roleBadge.employee;
+
   return (
     <div className="sidebar-custom d-flex flex-column" style={{ width: "280px", minHeight: "100vh", backgroundColor: '#fff', borderRight: '1px solid var(--border-color)' }}>
       {/* Brand Identity */}
@@ -48,62 +69,81 @@ export default function Sidebar() {
             <div className="bg-primary rounded-3 d-flex align-items-center justify-content-center shadow-sm" style={{ width: '32px', height: '32px' }}>
                 <i className="bi bi-hexagon-half text-white fs-6"></i>
             </div>
-            <span className="fw-bold fs-5 tracking-tight text-dark">DataPro <span className="text-primary">SI</span></span>
+            <span className="fw-bold fs-5 tracking-tight text-dark">System <span className="text-primary">Integration</span></span>
          </div>
-         <p className="extra-small text-muted fw-bold text-uppercase ls-wide mb-0">Enterprise Resource Hub</p>
+         <p className="extra-small text-muted fw-bold text-uppercase ls-wide mb-0">HR & Payroll Dashboard</p>
       </div>
 
       <div className="flex-grow-1 px-3 overflow-auto">
-        {isAdmin && (
+        {hasAnyLinks ? (
           <>
-            <div className="nav-group mb-4">
-              <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Management</div>
-              <div className="list-group list-group-flush">
-                 {managementLinks.map(renderLink)}
+            {mgmt.length > 0 && (
+              <div className="nav-group mb-4">
+                <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Management</div>
+                <div className="list-group list-group-flush">
+                   {mgmt.map(renderLink)}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="nav-group mb-4">
-              <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Operations</div>
-              <div className="list-group list-group-flush">
-                 {operationalLinks.map(renderLink)}
+            {ops.length > 0 && (
+              <div className="nav-group mb-4">
+                <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Operations</div>
+                <div className="list-group list-group-flush">
+                   {ops.map(renderLink)}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="nav-group mb-4">
-              <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Intelligence</div>
-              <div className="list-group list-group-flush">
-                 {systemLinks.map(renderLink)}
+            {intel.length > 0 && (
+              <div className="nav-group mb-4">
+                <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Intelligence</div>
+                <div className="list-group list-group-flush">
+                   {intel.map(renderLink)}
+                </div>
               </div>
-            </div>
+            )}
+
+            {adminLinks.length > 0 && (
+              <div className="nav-group mb-4">
+                <div className="px-3 extra-small fw-bold text-muted text-uppercase ls-wide mb-2 opacity-50">Administration</div>
+                <div className="list-group list-group-flush">
+                   {adminLinks.map(renderLink)}
+                </div>
+              </div>
+            )}
           </>
-        )}
-        
-        {!isAdmin && (
+        ) : (
           <div className="p-4 text-center mt-5">
              <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: '60px', height: '60px' }}>
                 <i className="bi bi-shield-lock text-muted fs-4"></i>
              </div>
-             <p className="extra-small text-muted fw-bold text-uppercase ls-wide">Restricted Access</p>
-             <p className="extra-small text-muted mb-0">Admin permissions required for full dashboard.</p>
+             <p className="extra-small text-muted fw-bold text-uppercase ls-wide">Employee Portal</p>
+             <p className="extra-small text-muted mb-0">You can view your profile and personal info.</p>
           </div>
         )}
       </div>
 
       {/* Mini Profile Footer */}
       <div className="mt-auto p-3 border-top bg-light bg-opacity-50">
-        <Link to="/profile" className="text-decoration-none">
-          <div className="d-flex align-items-center p-2 rounded-4 hover-lift" style={{ backgroundColor: 'white', border: '1px solid rgba(0,0,0,0.05)' }}>
+        <div className="d-flex align-items-center p-2 rounded-4" style={{ backgroundColor: 'white', border: '1px solid rgba(0,0,0,0.05)' }}>
+          <Link to="/profile" className="text-decoration-none d-flex align-items-center flex-grow-1 hover-lift">
             <div className="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center fw-bold me-3 shadow-sm" style={{ width: '40px', height: '40px' }}>
-              {displayName.charAt(0)}
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="overflow-hidden">
                <div className="small fw-bold text-dark text-truncate">{displayName}</div>
-               <div className="extra-small text-muted text-uppercase fw-bold" style={{ fontSize: '0.6rem', letterSpacing: '0.05em' }}>{user.role}</div>
+               <div className={`extra-small fw-bold text-uppercase ${badge.color}`} style={{ fontSize: '0.6rem', letterSpacing: '0.05em' }}>{badge.label}</div>
             </div>
-            <i className="bi bi-chevron-right ms-auto extra-small text-muted opacity-50"></i>
-          </div>
-        </Link>
+          </Link>
+          <button 
+            className="btn btn-sm btn-light border-0 ms-2 text-danger" 
+            onClick={() => { localStorage.removeItem('user'); localStorage.removeItem('token'); window.location.href='/'; }}
+            title="Log Out"
+          >
+            <i className="bi bi-box-arrow-right fs-5"></i>
+          </button>
+        </div>
       </div>
     </div>
   );
