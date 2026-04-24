@@ -297,9 +297,9 @@ export default function Employees() {
                         </Link>
                         {canEdit && (
                           <>
-                            <button className="btn-icon" data-tooltip="Edit Information">
+                            <Link to={`/employees/${emp.EmployeeID}`} className="btn-icon" data-tooltip="Edit Information">
                               <i className="bi bi-pencil"></i>
-                            </button>
+                            </Link>
                             {canDelete && (
                               <button
                                 className="btn-icon text-danger"

@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import StatCard from '../components/StatCard';
+import ChartCard from '../components/ChartCard';
+import ExportModal from '../components/ExportModal';
+import PayslipModal from '../components/PayslipModal';
+import Skeleton, { TableSkeleton } from '../components/Skeleton';
+import EmptyState from '../components/EmptyState';
 import { API_BASE, fetchAuth } from '../api';
 import { generateMonthOptions } from '../utils/dateUtils';
 
@@ -11,6 +17,8 @@ export default function Payroll() {
   const [departments, setDepartments] = useState([]);
   const [summary, setSummary] = useState({ TotalPayroll: 0, AvgSalary: 0 });
   const [loading, setLoading] = useState(true);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('All Months');
   const [selectedDept, setSelectedDept] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,9 +188,9 @@ export default function Payroll() {
                         {p.TotalSalary > 5000 && <i className="bi bi-lightning-fill text-warning small"></i>}
                       </div>
                     </td>
-                    <td className="pe-4 text-end">
-                       <button className="btn-icon" title="View Details">
-                          <i className="bi bi-eye"></i>
+                    <td className="text-end">
+                       <button className="btn-icon" onClick={() => setSelectedPayslip(p)}>
+                          <i className="bi bi-file-earmark-pdf"></i>
                        </button>
                     </td>
                   </tr>
@@ -192,6 +200,21 @@ export default function Payroll() {
           </table>
         </div>
       </div>
+
+      <ExportModal 
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        title="Payroll Registry Export"
+        columns={[{ header: 'Employee', key: 'FullName' }, { header: 'Net Salary', key: 'TotalSalary' }]}
+        data={filteredData}
+        filename="Executive_Payroll"
+      />
+
+      <PayslipModal
+        isOpen={!!selectedPayslip}
+        onClose={() => setSelectedPayslip(null)}
+        data={selectedPayslip}
+      />
     </div>
   );
 }
