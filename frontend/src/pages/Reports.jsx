@@ -1,97 +1,125 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
-import ChartCard from '../components/ChartCard';
-import ExportModal from '../components/ExportModal';
-import Skeleton from '../components/Skeleton';
 import { API_BASE, fetchAuth } from '../api';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('HR');
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({
-    hr: { bar: { labels: [], datasets: [] }, donut: { labels: [], datasets: [] }, table: [] },
-    payroll: { line: { labels: [], datasets: [] }, bar: { labels: [], datasets: [] }, table: [] },
-    attendance: { bar: { labels: [], datasets: [] }, table: [] },
-    dividend: { donut: { labels: [], datasets: [] }, table: [] }
-  });
+  const [departments, setDepartments] = useState([]);
+  const [selectedDept, setSelectedDept] = useState('');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
+  const [hrData, setHrData] = useState({ labels: [], data: [] });
+  const [payrollData, setPayrollData] = useState({ labels: [], data: [] });
+  const [trendData, setTrendData] = useState({ labels: [], data: [] });
 
   const tabs = [
-    { id: 'HR', label: 'HR Analytics', icon: 'bi-person-badge' },
-    { id: 'PAYROLL', label: 'Payroll Metrics', icon: 'bi-cash-coin' },
-    { id: 'ATTENDANCE', label: 'Operations', icon: 'bi-calendar-week' },
-    { id: 'DIVIDEND', label: 'Dividends', icon: 'bi-wallet' }
+    { id: 'HR', label: 'HR Report', icon: 'bi-person-badge' },
+    { id: 'PAYROLL', label: 'Payroll Report', icon: 'bi-cash-coin' },
+    { id: 'ATTENDANCE', label: 'Attendance Report', icon: 'bi-calendar-check' },
+    { id: 'DIVIDEND', label: 'Dividend Report', icon: 'bi-wallet2' }
   ];
 
-  const loadHRData = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-        const [hrDist] = await Promise.all([
-            fetchAuth(`${API_BASE}/reports/hr`).then(res => res.json())
-        ]);
-        const statuses = hrDist.reduce((acc, curr) => {
-             acc[curr.Status] = (acc[curr.Status] || 0) + curr.Count;
-             return acc;
-        }, {});
-        const total = hrDist.reduce((acc, curr) => acc + curr.Count, 0);
+      const [depts, hrRaw, paySummary, trendRaw] = await Promise.all([
+        fetchAuth(`${API_BASE}/departments`).then(res => res.json()),
+        fetchAuth(`${API_BASE}/dashboard/status-overview`).then(res => res.json()),
+        fetchAuth(`${API_BASE}/payroll/summary`).then(res => res.json()),
+        fetchAuth(`${API_BASE}/dashboard/performance`).then(res => res.json())
+      ]);
 
-        setData(prev => ({
-            ...prev,
-            hr: {
-                bar: { labels: ['Active Workforce'], datasets: [{ label: 'Operational Members', data: [total], backgroundColor: '#4f46e5', borderRadius: 12 }] },
-                donut: { labels: Object.keys(statuses), datasets: [{ data: Object.values(statuses), backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#4f46e5'], borderWidth: 0 }] },
-                table: [ { metric: 'Total Identified Talent', value: total }, { metric: 'Unique Status Segments', value: Object.keys(statuses).length } ]
-            }
-        }));
-    } catch (e) { console.error(e); }
-  }, []);
+      setDepartments(Array.isArray(depts) ? depts : []);
+      
+      // HR Dist (Donut)
+      setHrData({
+        labels: Object.keys(hrRaw),
+        data: Object.values(hrRaw)
+      });
 
-  const loadPayrollData = useCallback(async () => {
-    try {
-        const [history] = await Promise.all([
-            fetchAuth(`${API_BASE}/reports/payroll`).then(res => res.json())
-        ]);
-        const last6 = (history || []).slice(-6);
-        const totalPayroll = history.reduce((acc, curr) => acc + curr.TotalNet, 0);
-        const avgPayroll = history.length ? totalPayroll / history.length : 0;
-        setData(prev => ({
-            ...prev,
-            payroll: {
-                line: { labels: last6.map(h => h.Month), datasets: [{ label: 'Net Inflow', data: last6.map(h => h.TotalNet), borderColor: '#4f46e5', fill: true, backgroundColor: 'rgba(79, 70, 229, 0.1)', tension: 0.4 }] },
-                bar: { labels: last6.map(h => h.Month), datasets: [{ label: 'Deductions', data: last6.map(h => h.TotalDeductions), backgroundColor: '#ef4444', borderRadius: 8 }] },
-                table: [ { metric: 'Cumulative Payroll', value: `$${totalPayroll.toLocaleString()}` }, { metric: 'Median Compensation', value: `$${avgPayroll.toLocaleString()}` } ]
-            }
-        }));
-    } catch (e) { console.error(e); }
+      // Payroll by Dept (Bar)
+      const payDepts = paySummary.Breakdown || [];
+      setPayrollData({
+        labels: payDepts.map(d => `Dept ${d.DepartmentID}`),
+        data: payDepts.map(d => d.Amount)
+      });
+
+      // Trend (Line)
+      setTrendData({
+        labels: trendRaw.labels || [],
+        data: trendRaw.revenue || []
+      });
+
+    } catch (e) {
+      console.error("Reports load error:", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    let p;
-    if (activeTab === 'HR') p = loadHRData();
-    else if (activeTab === 'PAYROLL') p = loadPayrollData();
-    else p = Promise.resolve();
-    p.finally(() => setLoading(false));
-  }, [activeTab, loadHRData, loadPayrollData]);
+    loadData();
+  }, [loadData]);
 
-  const activeContent = data[activeTab.toLowerCase()] || data.hr;
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+      tooltip: { backgroundColor: '#0f172a', padding: 12, cornerRadius: 8 }
+    }
+  };
 
   return (
-    <div className="pb-5">
-      <div className="d-flex justify-content-between align-items-center mb-5 animate-slide-up">
+    <div className="animate-fade-in">
+      <div className="page-header mb-4">
         <div>
-          <h2 className="fw-bold text-dark mb-1 tracking-tight">Intelligence & Audits</h2>
-          <p className="text-muted small mb-0">Deep-dive into organizational metrics with automated reporting.</p>
+          <h1 className="page-title">Reports & Analytics</h1>
+          <p className="page-subtitle">Generate comprehensive insights into organizational data</p>
         </div>
-        <button className="btn btn-primary-custom px-4 shadow-sm fw-bold" onClick={() => setIsExportModalOpen(true)}>
-           <i className="bi bi-file-earmark-pdf me-2"></i> Export Summary
-        </button>
+        <div className="d-flex gap-2">
+          <button className="btn btn-outline"><i className="bi bi-file-earmark-excel me-2"></i> Export Excel</button>
+          <button className="btn btn-primary shadow-sm"><i className="bi bi-file-earmark-pdf me-2"></i> Export PDF</button>
+        </div>
       </div>
 
-      <div className="card-custom p-2 mb-5 bg-white border shadow-sm glass-card animate-slide-up" style={{ animationDelay: '0.1s' }}>
+      {/* Filter Bar */}
+      <div className="card border-0 shadow-sm p-3 mb-4 bg-white">
+        <div className="row g-3">
+          <div className="col-md-3">
+            <label className="form-label small fw-bold text-muted">Date Range</label>
+            <div className="input-group input-group-sm">
+              <input type="date" className="form-control" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
+              <span className="input-group-text bg-light border-0">to</span>
+              <input type="date" className="form-control" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
+            </div>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label small fw-bold text-muted">Department</label>
+            <select className="form-select form-select-sm" value={selectedDept} onChange={e => setSelectedDept(e.target.value)}>
+              <option value="">All Departments</option>
+              {departments.map(d => <option key={d.DepartmentID} value={d.DepartmentName}>{d.DepartmentName}</option>)}
+            </select>
+          </div>
+          <div className="col-md-6 d-flex align-items-end justify-content-end">
+             <button className="btn btn-sm btn-primary px-4" onClick={loadData}>Apply Filters</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="card-custom p-1 mb-4 bg-light rounded-4 d-inline-flex border shadow-sm">
         <ul className="nav nav-pills gap-1">
           {tabs.map(tab => (
             <li key={tab.id} className="nav-item">
-              <button className={`nav-link rounded-3 px-4 py-2 fw-bold small d-flex align-items-center gap-2 transition-all ${activeTab === tab.id ? 'bg-primary text-white shadow' : 'text-muted hover-bg-light'}`} onClick={() => setActiveTab(tab.id)}>
+              <button 
+                className={`nav-link rounded-4 px-4 py-2 fw-bold small d-flex align-items-center gap-2 ${activeTab === tab.id ? 'bg-primary text-white shadow' : 'text-muted'}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
                 <i className={`bi ${tab.icon}`}></i> {tab.label}
               </button>
             </li>
@@ -99,44 +127,62 @@ export default function Reports() {
         </ul>
       </div>
 
-      {loading ? <div className="py-5 text-center"><div className="spinner-border text-primary"></div></div> : (
-        <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-          <div className="row g-4 mb-5">
-             <div className="col-12 col-xl-7">
-                <ChartCard title={`${activeTab} Flow Overview`} subtitle="Primary distribution over recent operational cycles">
-                   <div style={{ height: '350px' }}>
-                      {activeTab === 'HR' && <Bar data={activeContent.bar} options={{ responsive: true, maintainAspectRatio: false }} />}
-                      {activeTab === 'PAYROLL' && <Line data={activeContent.line} options={{ responsive: true, maintainAspectRatio: false }} />}
-                   </div>
-                </ChartCard>
-             </div>
-             <div className="col-12 col-xl-5">
-                <ChartCard title="Segment Distribution" subtitle="Percentage share across identified sectors">
-                    <div style={{ height: '350px' }}>
-                       {activeTab === 'HR' && <Doughnut data={activeContent.donut} options={{ cutout: '70%', maintainAspectRatio: false }} />}
-                       {activeTab === 'PAYROLL' && <Bar data={activeContent.bar} options={{ maintainAspectRatio: false }} />}
-                    </div>
-                </ChartCard>
-             </div>
+      {loading ? (
+        <div className="py-5 text-center"><div className="spinner-border text-primary"></div></div>
+      ) : (
+        <div className="row g-4">
+          <div className="col-lg-4">
+            <div className="card border-0 shadow-sm h-100">
+               <h6 className="fw-bold mb-4 text-muted text-uppercase ls-1">Employee Distribution</h6>
+               <div style={{ height: '300px' }}>
+                  <Doughnut 
+                    data={{
+                      labels: hrData.labels,
+                      datasets: [{ data: hrData.data, backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'], borderWidth: 0 }]
+                    }} 
+                    options={{ ...chartOptions, cutout: '70%' }}
+                  />
+               </div>
+            </div>
           </div>
-
-          <div className="table-container p-5 border-0 shadow-sm glass-card text-center">
-             <h5 className="fw-bold text-dark mb-5 text-uppercase ls-wide extra-small">Executive Statistics Summary</h5>
-             <div className="row g-4">
-                {activeContent.table.map((item, i) => (
-                   <div key={i} className="col-12 col-md-4">
-                      <div className="p-4 rounded-4 border bg-light bg-opacity-25 hover-lift">
-                         <div className="text-muted extra-small fw-bold mb-2 text-uppercase ls-wide">{item.metric}</div>
-                         <div className="h2 fw-bold text-dark mb-0 tracking-tight">{item.value}</div>
-                      </div>
-                   </div>
-                ))}
-             </div>
+          <div className="col-lg-8">
+            <div className="card border-0 shadow-sm h-100">
+               <h6 className="fw-bold mb-4 text-muted text-uppercase ls-1">Salary by Department</h6>
+               <div style={{ height: '300px' }}>
+                  <Bar 
+                    data={{
+                      labels: payrollData.labels,
+                      datasets: [{ label: 'Total Payroll', data: payrollData.data, backgroundColor: '#3b82f6', borderRadius: 6 }]
+                    }}
+                    options={chartOptions}
+                  />
+               </div>
+            </div>
+          </div>
+          <div className="col-lg-12">
+            <div className="card border-0 shadow-sm">
+               <h6 className="fw-bold mb-4 text-muted text-uppercase ls-1">Payroll Trend Analytics</h6>
+               <div style={{ height: '350px' }}>
+                  <Line 
+                    data={{
+                      labels: trendData.labels,
+                      datasets: [{
+                        label: 'Gross Payroll',
+                        data: trendData.data,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3
+                      }]
+                    }}
+                    options={chartOptions}
+                  />
+               </div>
+            </div>
           </div>
         </div>
       )}
-
-      <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title={`${activeTab} Executive Report`} columns={[{header:'Metric', key:'metric'}, {header:'Value', key:'value'}]} data={activeContent.table} filename={`${activeTab}_Analytics`} />
     </div>
   );
 }

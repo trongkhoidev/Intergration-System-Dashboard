@@ -1,17 +1,15 @@
-import Header from "./Header";
-import Sidebar from "./Sidebar";
+import Sidebar from './Sidebar';
+import Header from './Header';
 
 export default function Layout({ children }) {
   return (
-    <div className="d-flex flex-column vh-100">
-      <Header />
-      <div className="d-flex flex-grow-1 overflow-hidden">
-        <Sidebar />
-        <main className="content-wrapper flex-grow-1 p-4 overflow-auto">
-          <div className="container-fluid">
-            {children}
-          </div>
-        </main>
+    <div className="app-layout">
+      <Sidebar />
+      <div className="main-area">
+        <Header />
+        <div className="content-area animate-in">
+          {children}
+        </div>
       </div>
     </div>
   );

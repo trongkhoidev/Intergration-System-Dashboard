@@ -1,22 +1,19 @@
 import { useState, useEffect } from 'react';
 import AlertDetailPanel from '../components/AlertDetailPanel';
-import Skeleton, { TableSkeleton } from '../components/Skeleton';
-import EmptyState from '../components/EmptyState';
 import { API_BASE, fetchAuth } from '../api';
-import { getCurrentUser } from '../utils/auth';
 
 export default function Alerts() {
-  const user = getCurrentUser();
-  const canCreateAlert = ['admin', 'hr'].includes(user.normalizedRole);
   const [alerts, setAlerts] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [filterType, setFilterType] = useState('All');
+  const [filterSeverity, setFilterSeverity] = useState('All');
 
   useEffect(() => {
     fetchAuth(`${API_BASE}/alerts`)
       .then(res => res.json())
       .then(data => {
-        setAlerts(data);
+        setAlerts(Array.isArray(data) ? data : []);
         setLoading(false);
       }).catch(err => {
         console.error(err);
@@ -29,77 +26,105 @@ export default function Alerts() {
     setSelectedAlert(null);
   };
 
+  const filteredAlerts = alerts.filter(a => {
+    const matchType = filterType === 'All' || a.type === filterType;
+    const matchSev = filterSeverity === 'All' || a.severity === filterSeverity;
+    return matchType && matchSev;
+  });
+
   return (
-    <div className="pb-5">
-      <div className="d-flex justify-content-between align-items-center mb-5 animate-slide-up">
+    <div className="animate-fade-in">
+      <div className="page-header mb-4">
         <div>
-          <h2 className="fw-bold text-dark mb-1 tracking-tight">System Notifications</h2>
-          <p className="text-muted small mb-0">Monitor high-priority anomalies and workforce milestones.</p>
+          <h1 className="page-title">System Alerts</h1>
+          <p className="page-subtitle">Monitor and resolve system-generated notifications</p>
         </div>
-        {canCreateAlert && (
-          <button className="btn btn-primary-custom px-4 shadow-sm fw-bold">
-            <i className="bi bi-shield-plus me-1"></i> New Protocol
-          </button>
-        )}
+        <div className="d-flex gap-2">
+           <span className="badge bg-danger-light text-danger p-2 px-3 rounded-pill fw-bold">
+             {alerts.length} Pending Resolutions
+           </span>
+        </div>
       </div>
 
-      <div className="table-container p-0 border-0 shadow-sm glass-card animate-slide-up shadow-sm">
-        <div className="filter-bar border-bottom">
-           <div className="d-flex gap-2">
-              <select className="form-select form-control-custom w-auto border-0 bg-light fw-bold">
-                 <option>Filter All Categories</option>
-                 <option>Operational Alerts</option>
-                 <option>Cultural Milestones</option>
+      <div className="row g-4">
+        <div className={selectedAlert ? "col-lg-7" : "col-lg-12"}>
+          <div className="card p-0 border-0 shadow-sm overflow-hidden bg-white">
+            <div className="p-3 border-bottom d-flex gap-2 flex-wrap bg-light">
+              <select className="form-select form-select-sm w-auto" value={filterType} onChange={e => setFilterType(e.target.value)}>
+                <option value="All">All Types</option>
+                <option value="Salary">Salary Anomalies</option>
+                <option value="Attendance">Attendance</option>
+                <option value="System">System</option>
               </select>
-           </div>
-           <div className="text-muted extra-small fw-bold">
-              PENDING RESOLUTIONS: <span className="text-primary">{alerts.length}</span>
-           </div>
+              <select className="form-select form-select-sm w-auto" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+                <option value="All">All Severities</option>
+                <option value="critical">Critical</option>
+                <option value="warning">Warning</option>
+                <option value="info">Info</option>
+              </select>
+            </div>
+
+            <div className="table-responsive">
+              <table className="data-table mb-0">
+                <thead>
+                  <tr>
+                    <th className="ps-4">Type</th>
+                    <th>Message</th>
+                    <th>Severity</th>
+                    <th className="pe-4 text-end">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? [...Array(6)].map((_, i) => (
+                    <tr key={i}>
+                      <td className="ps-4"><div className="skeleton" style={{ height: 20, width: 80 }}></div></td>
+                      <td><div className="skeleton" style={{ height: 16, width: 200 }}></div></td>
+                      <td><div className="skeleton" style={{ height: 24, width: 70, borderRadius: 20 }}></div></td>
+                      <td className="pe-4 text-end"><div className="skeleton" style={{ height: 16, width: 100, float: 'right' }}></div></td>
+                    </tr>
+                  )) : filteredAlerts.length === 0 ? (
+                    <tr><td colSpan={4} className="text-center py-5 text-muted">No alerts found</td></tr>
+                  ) : (
+                    filteredAlerts.map((a, i) => (
+                      <tr 
+                        key={i} 
+                        className={`hover-row ${selectedAlert === a ? 'bg-primary-light' : ''}`} 
+                        onClick={() => setSelectedAlert(a)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td className="ps-4">
+                          <span className={`badge bg-${a.type === 'Salary' ? 'success' : 'primary'}-light text-${a.type === 'Salary' ? 'success' : 'primary'}`}>
+                            {a.type}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="text-dark fw-600 text-truncate" style={{ maxWidth: 250 }}>{a.message}</div>
+                        </td>
+                        <td>
+                          <span className={`badge badge-${a.severity === 'critical' ? 'active' : a.severity === 'warning' ? 'probation' : 'inactive'}`}>
+                            {a.severity}
+                          </span>
+                        </td>
+                        <td className="pe-4 text-end small text-muted">{a.date}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
-        <div className="table-responsive">
-          <table className="table-custom">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Anomaly Identity</th>
-                <th>Context</th>
-                <th>Priority</th>
-                <th className="text-end">Command</th>
-              </tr>
-            </thead>
-            {loading ? <TableSkeleton rows={6} columns={5} /> : (
-              <tbody>
-                {alerts.map((a, i) => (
-                  <tr key={i} className="hover-row" onClick={() => setSelectedAlert(a)} style={{ cursor: 'pointer' }}>
-                    <td>
-                       <div className={`p-2 rounded-3 bg-light d-flex align-items-center justify-content-center ${a.severity === 'critical' ? 'text-danger' : 'text-primary'}`} style={{ width: '40px', height: '40px' }}>
-                          <i className={`bi ${a.type === 'Birthday' ? 'bi-gift-fill' : 'bi-exclamation-triangle-fill'} fs-5`}></i>
-                       </div>
-                    </td>
-                    <td><div className="fw-bold text-dark mb-0">System Node {i+1}</div><div className="extra-small text-muted">{a.type}</div></td>
-                    <td><div className="text-muted small text-truncate-custom" style={{ maxWidth: '300px' }}>{a.message}</div></td>
-                    <td>
-                       <span className={`badge-custom ${a.severity === 'critical' ? 'severity-critical' : a.severity === 'warning' ? 'severity-warning' : 'severity-info'}`}>
-                          {a.severity}
-                       </span>
-                    </td>
-                    <td className="text-end">
-                       <button className="btn btn-sm btn-white border px-3 fw-bold rounded-pill shadow-sm" onClick={() => setSelectedAlert(a)}>Inspect</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            )}
-          </table>
-        </div>
-        
-        {!loading && alerts.length === 0 && (
-           <EmptyState icon="🛡️" title="All nodes secure" message="No pending anomalies detected in the current operational cycle." />
+        {selectedAlert && (
+          <div className="col-lg-5">
+            <AlertDetailPanel 
+              alert={selectedAlert} 
+              onClose={() => setSelectedAlert(null)} 
+              onAction={handleAlertAction} 
+            />
+          </div>
         )}
       </div>
-
-      <AlertDetailPanel alert={selectedAlert} onClose={() => setSelectedAlert(null)} onAction={handleAlertAction} />
     </div>
   );
 }
