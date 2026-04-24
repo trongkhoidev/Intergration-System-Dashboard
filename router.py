@@ -312,99 +312,114 @@ def get_dashboard_stats():
 @router.route("/api/alerts")
 @require_auth()
 def get_alerts():
+    from datetime import date
     alerts = []
+    today = date.today()
+    current_month = today.month
+    current_year = today.year
+    INACTIVE_STATUSES = ('Inactive',)
+
     try:
         sql = get_sqlserver_connection()
         cur = sql.cursor()
 
-        # Try to get manual alerts if the table exists
-        try:
-            cur.execute("SELECT AlertType, Message, Severity, CreatedAt FROM Alerts ORDER BY CreatedAt DESC")
-            for r in cur.fetchall():
-                alerts.append({"type": r[0], "message": r[1], "severity": r[2], "date": str(r[3]), "employee": "Manual Alert"})
-        except Exception:
-            pass
-
-        # 1. Birthday Alerts
-        cur.execute("SELECT EmployeeID, FullName FROM Employees WHERE MONTH(DateOfBirth) = MONTH(GETDATE()) AND Status = 'Active'")
-        for r in cur.fetchall():
-            alerts.append({"type": "Birthday", "message": f"It's {r[1]}'s birthday month!", "severity": "info", "date": "This month", "employee": r[1], "employeeId": r[0]})
-
-        # 2. Work Anniversary Alerts – FR10: 1, 3, 5 year milestones (BR-09: 12,36,60 months)
+        # FR10-A: Birthday Alerts (SQL Server - Employees.DateOfBirth)
         cur.execute("""
-            SELECT EmployeeID, FullName, HireDate, DATEDIFF(MONTH, HireDate, GETDATE()) AS Months
-            FROM Employees WHERE Status = 'Active'
-            AND DATEDIFF(MONTH, HireDate, GETDATE()) IN (12, 36, 60)
+            SELECT EmployeeID, FullName, DateOfBirth, Status
+            FROM Employees
+            WHERE MONTH(DateOfBirth) = ?
+        """, (current_month,))
+        for r in cur.fetchall():
+            if r[3] in INACTIVE_STATUSES:
+                continue
+            dob_str = str(r[2])[:10] if r[2] else 'N/A'
+            alerts.append({
+                "type": "Birthday",
+                "message": f"{r[1]} has a birthday this month (DOB: {dob_str})",
+                "severity": "info",
+                "date": f"Month {current_month}/{current_year}",
+                "employee": r[1],
+                "employeeId": r[0]
+            })
+
+        # FR10-B: Work Anniversary Alerts (1, 3, 5 years - computed in Python)
+        cur.execute("""
+            SELECT EmployeeID, FullName, HireDate, Status
+            FROM Employees
+            WHERE HireDate IS NOT NULL
         """)
         for r in cur.fetchall():
-            years = r[3] // 12
-            alerts.append({"type": "Work anniversary", "message": f"{r[1]} celebrates {years} year(s) of service", "severity": "info", "date": str(r[2]), "employee": r[1], "employeeId": r[0]})
+            if r[3] in INACTIVE_STATUSES or not r[2]:
+                continue
+            hire_date = r[2]
+            years = current_year - hire_date.year
+            if hire_date.month == current_month and years in (1, 3, 5):
+                alerts.append({
+                    "type": "Work anniversary",
+                    "message": f"{r[1]} celebrates {years} year(s) of service this month (hired: {hire_date.strftime('%d/%m/%Y')})",
+                    "severity": "info",
+                    "date": f"{years} year(s) since {hire_date.strftime('%d/%m/%Y')}",
+                    "employee": r[1],
+                    "employeeId": r[0]
+                })
 
-        # 3. Excessive Leave – FR11: >12 days/year (BR-19)
+        # FR11: Excessive Leave Alerts (MySQL - attendance.LeaveDays)
+        # Uses all available attendance records (not year-filtered due to limited data)
         my = get_mysql_connection()
         mcur = my.cursor(dictionary=True)
         mcur.execute("""
-            SELECT e.EmployeeID, e.FullName, SUM(a.LeaveDays) AS TotalLeave
-            FROM attendance a JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
-            WHERE e.Status = 'Đang làm việc' OR e.Status = 'Active'
-            GROUP BY e.EmployeeID, e.FullName HAVING SUM(a.LeaveDays) > 12
+            SELECT ep.EmployeeID, ep.FullName, SUM(a.LeaveDays) AS TotalLeave
+            FROM attendance a
+            JOIN employees_payroll ep ON a.EmployeeID = ep.EmployeeID
+            GROUP BY ep.EmployeeID, ep.FullName
+            HAVING SUM(a.LeaveDays) > 3
         """)
         for r in mcur.fetchall():
-            alerts.append({"type": "Excessive leave", "message": f"{r['FullName']} exceeded {r['TotalLeave']} annual leave days (limit: 12)", "severity": "warning", "date": "Current year", "employee": r['FullName'], "employeeId": r['EmployeeID']})
+            total = int(r['TotalLeave'])
+            severity = "critical" if total > 8 else "warning"
+            alerts.append({
+                "type": "Excessive leave",
+                "message": f"{r['FullName']} has {total} accumulated leave day(s) on record (BR-19)",
+                "severity": severity,
+                "date": "All records",
+                "employee": r['FullName'],
+                "employeeId": r['EmployeeID']
+            })
 
-        # 4. Salary Anomaly – FR12: >20% change between periods (BR-11)
+        # FR12: Salary Anomaly Alerts (MySQL - salaries, max vs min SalaryID per employee)
         mcur.execute("""
-            SELECT e.EmployeeID, e.FullName, s1.NetSalary AS Current, s2.NetSalary AS Previous,
-                   ROUND(ABS(s1.NetSalary - s2.NetSalary) / s2.NetSalary * 100, 1) AS PctChange
-            FROM salaries s1
-            JOIN salaries s2 ON s1.EmployeeID = s2.EmployeeID AND s1.SalaryID > s2.SalaryID
-            JOIN employees_payroll e ON s1.EmployeeID = e.EmployeeID
-            WHERE ABS(s1.NetSalary - s2.NetSalary) / s2.NetSalary > 0.20
-            AND s2.NetSalary > 0
-            ORDER BY s1.SalaryID DESC LIMIT 10
+            SELECT
+                ep.EmployeeID, ep.FullName,
+                s_new.NetSalary AS NewSalary,
+                s_old.NetSalary AS OldSalary,
+                ROUND(ABS(s_new.NetSalary - s_old.NetSalary) / s_old.NetSalary * 100, 1) AS PctChange
+            FROM employees_payroll ep
+            JOIN salaries s_new ON s_new.SalaryID = (
+                SELECT MAX(SalaryID) FROM salaries WHERE EmployeeID = ep.EmployeeID
+            )
+            JOIN salaries s_old ON s_old.SalaryID = (
+                SELECT MIN(SalaryID) FROM salaries WHERE EmployeeID = ep.EmployeeID
+            )
+            WHERE s_old.NetSalary > 0
+            AND s_new.SalaryID != s_old.SalaryID
+            AND ABS(s_new.NetSalary - s_old.NetSalary) / s_old.NetSalary > 0.20
         """)
         for r in mcur.fetchall():
-            alerts.append({"type": "Salary anomaly", "message": f"Unusual salary change for {r['FullName']}: {r['PctChange']}% difference", "severity": "critical", "date": "Recent", "employee": r['FullName'], "employeeId": r['EmployeeID']})
+            pct = float(r['PctChange'])
+            direction = "increase" if r['NewSalary'] > r['OldSalary'] else "decrease"
+            alerts.append({
+                "type": "Salary anomaly",
+                "message": f"{r['FullName']} had a {pct}% salary {direction} between pay records (threshold: 20%, BR-11)",
+                "severity": "critical",
+                "date": "Across pay periods",
+                "employee": r['FullName'],
+                "employeeId": r['EmployeeID']
+            })
 
         return jsonify(alerts)
     except Exception as e:
         print(f"Error in get_alerts: {e}")
         return jsonify(alerts)
-
-@router.route("/api/alerts", methods=["POST"])
-@require_auth(["Admin", "HR"])
-def create_alert():
-    data = request.json
-    try:
-        sql = get_sqlserver_connection()
-        sql.autocommit = True
-        cur = sql.cursor()
-        
-        # Create table if not exists
-        try:
-            cur.execute("""
-                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Alerts')
-                CREATE TABLE Alerts (
-                    AlertID INT PRIMARY KEY IDENTITY(1,1),
-                    AlertType NVARCHAR(50),
-                    Message NVARCHAR(255),
-                    Severity NVARCHAR(20),
-                    CreatedAt DATETIME DEFAULT GETDATE()
-                )
-            """)
-        except Exception:
-            pass
-
-        cur.execute("INSERT INTO Alerts (AlertType, Message, Severity) VALUES (?, ?, ?)", 
-                   (data.get("type", "Manual"), data.get("message"), data.get("severity", "info")))
-        
-        username = getattr(request, 'current_user', {}).get('username', 'system')
-        log_audit("ALERT_CREATED", username, f"Created manual alert: {data.get('message')}")
-        
-        return jsonify({"status": "success"})
-    except Exception as e:
-        print(f"Error creating alert: {e}")
-        return jsonify({"status": "error", "msg": str(e)}), 500
 
 # ============================================================
 # NEW API: CHANGE PASSWORD (FUNCTIONAL)
@@ -709,8 +724,8 @@ def update_employee(emp_id):
     phone = data.get("PhoneNumber")
     email = data.get("Email")
     hire_date = data.get("HireDate")
-    dept_id = data.get("DepartmentID")
-    pos_id = data.get("PositionID")
+    dept_id = data.get("DepartmentID") or None
+    pos_id = data.get("PositionID") or None
     status = data.get("Status")
 
     sql = None
