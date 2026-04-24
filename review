@@ -1,0 +1,258 @@
+# 📋 Phân Tích Khoảng Trống Dự Án – Integration System Dashboard
+
+> [!IMPORTANT]
+> Tài liệu này đối chiếu **Proposal (IEEE 830)**, **SRS**, **API Integration Plan**, **DB Schema** và **UI Design** với code hiện tại để liệt kê toàn bộ những gì CÒN THIẾU và CẦN SỬA.
+
+---
+
+## 1. 🔐 Bảo mật & Xác thực (CRITICAL – Thiếu rất nhiều)
+
+### Hiện trạng
+- Login bằng `username` + `password` → trả về JSON `{ user: { username, role } }` → lưu vào `localStorage`.
+- **KHÔNG có JWT Token** (SRS yêu cầu bắt buộc).
+- **KHÔNG có RBAC middleware** trên Backend (mọi API đều PUBLIC, ai cũng gọi được).
+- **KHÔNG có cơ chế khóa tài khoản** sau 3 lần đăng nhập sai (BR-21).
+- **KHÔNG có Audit Logs** (FR15, BR-15 yêu cầu ghi nhật ký cho mọi thao tác).
+
+### Yêu cầu từ Proposal/SRS
+
+| Mã | Yêu cầu | Trạng thái |
+|----|---------|------------|
+| FR13 | Đăng nhập/đăng xuất độc lập | ⚠️ Có nhưng thiếu JWT |
+| FR14 | RBAC phân quyền Admin/HR/Payroll | ❌ Chưa có |
+| FR15 | Audit Logs cho mọi thao tác | ❌ Chưa có |
+| BR-21 | Khóa tài khoản sau 3 lần sai | ❌ Chưa có |
+| BR-14 | Admin chỉ quản trị | ❌ Chưa phân quyền |
+| BR-12 | HR chỉ xem lương, không sửa | ❌ Chưa phân quyền |
+| BR-13 | Payroll chỉ xem nhân sự, không sửa | ❌ Chưa phân quyền |
+| SRS 4.2 | Mật khẩu hash (BCrypt/Argon2) | ✅ Dùng Werkzeug hash |
+| API Plan | JWT Token trả về khi login | ❌ Chưa có |
+
+### Cần làm
+1. Cài thêm thư viện `PyJWT` + tạo `jwt_utils.py` (tạo/xác thực token).
+2. Tạo decorator `@require_auth(roles=['Admin','HR'])` để bảo vệ tất cả API.
+3. Thêm cột `FailedAttempts`, `LockedUntil` vào bảng `SystemUsers` (trong DB HUMAN_AUTH - được phép vì đây là DB riêng của Dashboard).
+4. Tạo bảng `AuditLogs` trong HUMAN_AUTH.
+5. **Login phải trả về JWT token** thay vì chỉ trả `{ user }`.
+
+---
+
+## 2. 🔑 Login – Vấn đề Logic (theo yêu cầu #5 của bạn)
+
+### Hiện trạng
+- DB `SystemUsers` chỉ có cột `Username`, `PasswordHash`, `Role`.
+- SRS nói rõ: **"Xác thực đăng nhập bằng email/mật khẩu"** và **"Mỗi nhân viên có tài khoản email để đăng nhập"**.
+- Hiện tại đăng nhập bằng `username` (ví dụ `admin`), **KHÔNG phải email**.
+
+### Giải pháp (KHÔNG thêm bảng mới vào DB gốc)
+- Bảng `SystemUsers` nằm trong `HUMAN_AUTH` (DB riêng của Dashboard → **ĐƯỢC PHÉP chỉnh sửa**).
+- **Thêm cột `Email`** vào `SystemUsers` để đăng nhập bằng email.
+- Khi tạo user mới, liên kết với `Employees.Email` từ HUMAN_2025.
+- Frontend Login form đổi từ "Username" thành "Email".
+
+---
+
+## 3. 📧 Quên mật khẩu (yêu cầu #6)
+
+### Hiện trạng
+- Link "Forgot password?" trên giao diện Login chỉ là `<a href="#">` → **không làm gì**.
+
+### Cần làm
+1. **Backend**: Tạo API `POST /api/forgot-password` nhận `{ email }`, tạo reset token, gửi email qua SMTP.
+2. **Backend**: Tạo API `POST /api/reset-password` nhận `{ token, new_password }`.
+3. **Frontend**: Tạo form "Forgot Password" và "Reset Password" page.
+4. Thêm cột `ResetToken`, `ResetTokenExpiry` vào `SystemUsers`.
+
+> [!NOTE]
+> Phần SRS ghi "Out-of-Scope: Tự động gửi SMS/email", nhưng đây là về notification tự động. Reset password qua email vẫn được phép vì thuộc phạm vi xác thực người dùng.
+
+---
+
+## 4. 🗂️ API – Đối chiếu với API Integration Plan
+
+### Bảng đối chiếu API
+
+| # | Endpoint (theo Plan) | Method | Hiện trạng Backend | Ghi chú |
+|---|---------------------|--------|-------------------|---------|
+| 1 | `/login` | POST | ✅ Có | ⚠️ Thiếu JWT response |
+| 2 | `/employees` | GET | ✅ Có | ⚠️ Thiếu field `Status`, `Email` |
+| 3 | `/employees/{id}` | GET | ✅ Có | ✅ OK |
+| 4 | `/employees` | POST | ✅ Có | ✅ 2-Phase Commit |
+| 5 | `/employees/{id}` | PUT | ✅ Có | ✅ 2-Phase Commit |
+| 6 | `/employees/{id}` | DELETE | ✅ Có | ⚠️ Xoá vật lý, vi phạm BR-05 |
+| 7 | `/payroll` | GET | ✅ Có | ✅ OK |
+| 8 | `/payroll/{id}` | PUT | ❌ **THIẾU** | Cần tạo mới |
+| 9 | `/attendance` | GET | ✅ Có | ✅ OK |
+| 10 | `/reports` | GET | ❌ **THIẾU** | Chỉ có UI tĩnh, không có API |
+| 11 | `/alerts` | GET/POST | ⚠️ Chỉ có GET | Thiếu POST |
+| — | `/departments` | GET | ✅ Có | ✅ OK |
+| — | `/positions` | GET | ✅ Có | ✅ OK |
+| — | `/dividends` | GET | ✅ Có | ✅ OK |
+| — | `/password` | PUT | ✅ Có | ✅ OK |
+| — | `/forgot-password` | POST | ❌ **THIẾU** | Cần tạo mới |
+| — | `/reset-password` | POST | ❌ **THIẾU** | Cần tạo mới |
+| — | `/users` | GET/POST/PUT/DELETE | ❌ **THIẾU** | Admin quản lý tài khoản |
+| — | `/audit-logs` | GET | ❌ **THIẾU** | FR15 |
+
+---
+
+## 5. ⚠️ Lỗi Logic Cần Sửa Ngay
+
+### 5.1 Trạng thái nhân viên (Vấn đề #1 của bạn)
+
+**Vấn đề**: API `GET /employees` **KHÔNG trả về trường `Status`** mặc dù DB có.
+
+```python
+# router.py line 320-334 - THIẾU Status
+cur.execute("""
+    SELECT e.EmployeeID, e.FullName, d.DepartmentName, p.PositionName
+    FROM Employees e ...
+""")
+# → Không SELECT e.Status!
+```
+
+**Frontend** (Employees.jsx line 235-237) hiển thị `emp.Status` nhưng giá trị luôn undefined, nên mặc định hiển thị "Active":
+```jsx
+{emp.Status || 'Active'}  // Luôn là 'Active' vì API không trả Status
+```
+
+**Dashboard.jsx** (line 276): Luôn hardcode `badge-active` cho mọi nhân viên:
+```jsx
+<span className="badge-custom badge-active">Active</span>  // HARDCODED!
+```
+
+### 5.2 Xoá nhân viên vi phạm BR-05
+
+**Business Rule BR-05**: "Không xóa vật lý hồ sơ nhân viên; chỉ cập nhật trạng thái Inactive".
+
+Hiện tại `DELETE /employees/{id}` thực sự xoá dữ liệu khỏi DB → **Vi phạm**.
+
+### 5.3 Alert logic chưa đúng theo SRS
+
+- **FR10**: Cảnh báo kỷ niệm 1/3/5 năm dựa trên `HireDate` → Hiện tại chỉ check Birthday, **CHƯA có Anniversary**.
+- **FR11**: Cảnh báo vượt giới hạn nghỉ phép (>12 ngày/năm theo BR-19) → **CHƯA có**.
+- **FR12**: Cảnh báo biến động lương >20% → **CHƯA có** (chỉ check `NetSalary > 15000` rất thô).
+
+### 5.4 Performance chart dữ liệu giả (Mocked)
+
+```python
+# router.py line 130-137
+@router.route("/api/dashboard/performance")
+def get_performance():
+    # Mocked since there's no Revenue table
+    return jsonify({
+        "labels": ['May', 'Jun', ...],
+        "revenue": [65000, 72000, ...],    # HARDCODED
+    })
+```
+
+→ SRS yêu cầu **"báo cáo truy xuất dữ liệu trực tiếp từ DB"** (BR-18). Cần thay bằng dữ liệu thực từ bảng `salaries`.
+
+---
+
+## 6. 👤 Profile – Thiếu thông tin (Yêu cầu #2 của bạn)
+
+### Hiện trạng Profile.jsx
+- Chỉ hiển thị: Username, Role, một email giả (`username@integration.internal`).
+- Hardcode tên "Olivia Chen" cho admin.
+- **THIẾU**: Email thật, Phone, Department, Position, HireDate, DateOfBirth, Gender.
+
+### Cần làm
+1. Tạo API `GET /api/profile` trả về thông tin đầy đủ từ bảng `Employees` (join với `SystemUsers`).
+2. Tạo API `PUT /api/profile` cho phép cập nhật thông tin cá nhân.
+3. Cập nhật `Profile.jsx` hiển thị đầy đủ: Avatar, FullName, Email, Phone, Department, Position, HireDate, Status, Role.
+
+---
+
+## 7. 🔄 RBAC – Phân quyền chi tiết theo vai trò
+
+### Theo SRS, có 4 vai trò:
+
+| Vai trò | Quyền hạn |
+|---------|-----------|
+| **Admin** | Quản lý tài khoản user, phân quyền, cấu hình hệ thống. có tất cả các quyền |
+| **HR Manager** | CRUD nhân viên, phòng ban, chức vụ. Xem lương (READ-ONLY). Xem báo cáo |
+| **Payroll Manager** | Quản lý lương, chấm công. Xem nhân sự (READ-ONLY) |
+| **Employee** | Chỉ xem hồ sơ cá nhân, lịch sử lương, chấm công của mình |
+
+### Hiện trạng Frontend (App.js)
+- Chỉ phân biệt 2 loại: `admin` (xem tất cả) và `non-admin` (chỉ xem Profile).
+- **Chưa có** vai trò HR Manager, Payroll Manager, Employee.
+
+### Cần làm
+1. Sửa cột `Role` trong `SystemUsers` hỗ trợ: `Admin`, `HR`, `Payroll`, `Employee`.
+2. Tạo `setup_auth.py` khởi tạo user mẫu cho mỗi vai trò.
+3. Backend: Middleware kiểm tra role cho từng API route.
+4. Frontend: Route guard theo role, ẩn/hiện menu sidebar theo quyền.
+
+---
+
+## 8. 📊 Reports – Thiếu API Backend
+
+### Hiện trạng
+- `Reports.jsx` tồn tại nhưng hiển thị **dữ liệu tĩnh/mock**.
+- **Không có API `/api/reports`** trên backend.
+
+### Theo SRS (FR7, FR8, FR9)
+1. **FR7**: Báo cáo nhân sự theo thời gian/phòng ban/chức danh.
+2. **FR8**: Báo cáo chi phí lương và xu hướng tài chính.
+3. **FR9**: Phân tích hiệu suất chuyên cần và cổ tức.
+
+### Cần tạo
+- `GET /api/reports/hr` – Báo cáo nhân sự.
+- `GET /api/reports/payroll` – Báo cáo lương.
+- `GET /api/reports/attendance` – Báo cáo chuyên cần.
+- `GET /api/reports/dividends` – Báo cáo cổ tức.
+
+---
+
+## 9. 📦 Tổng hợp danh sách việc cần làm
+
+### ƯU TIÊN CAO (phải có để đạt yêu cầu đề bài)
+
+| # | Hạng mục | Chi tiết |
+|---|---------|---------|
+| 1 | **JWT Authentication** | Tạo `jwt_utils.py`, sửa `/login` trả JWT, middleware xác thực token |
+| 2 | **RBAC Backend** | Decorator phân quyền cho mọi API, thêm 4 vai trò |
+| 3 | **Fix GET /employees** | Thêm `Status` vào SELECT query |
+| 4 | **Fix DELETE → Soft Delete** | Đổi DELETE thành UPDATE Status='Inactive' (BR-05) |
+| 5 | **Fix Alerts logic** | Anniversary (1/3/5 năm), Leave >12 ngày, Salary >20% biến động |
+| 6 | **Tạo API Reports** | 4 endpoint reports từ dữ liệu thực |
+| 7 | **RBAC Frontend** | Route guard theo role, sidebar theo quyền |
+| 8 | **Login bằng Email** | Thêm cột Email vào SystemUsers, sửa Login form |
+| 9 | **Profile đầy đủ** | API + UI hiển thị thông tin nhân viên đầy đủ |
+| 10 | **Audit Logs** | Bảng + API ghi nhật ký mọi thao tác |
+
+### ƯU TIÊN TRUNG BÌNH
+
+| # | Hạng mục | Chi tiết |
+|---|---------|---------|
+| 11 | **Forgot Password** | API gửi email reset + Frontend form |
+| 12 | **PUT /payroll/{id}** | API cập nhật lương |
+| 13 | **POST /alerts** | API tạo cảnh báo thủ công |
+| 14 | **Khóa tài khoản** | Lock sau 3 lần sai (BR-21) |
+| 15 | **User Management** | Admin CRUD tài khoản hệ thống |
+| 16 | **Performance chart** | Thay dữ liệu mock bằng dữ liệu thực từ salaries |
+
+---
+
+## 10. Cấu trúc DB hiện tại (để tham khảo)
+
+### SQL Server – HUMAN_2025
+- `Departments` (DepartmentID, DepartmentName)
+- `Positions` (PositionID, PositionName)  
+- `Employees` (EmployeeID, FullName, Email, DateOfBirth, Gender, PhoneNumber, HireDate, DepartmentID, PositionID, Status)
+- `Dividends` (DividendID, EmployeeID, Amount)
+
+### SQL Server – HUMAN_AUTH (Dashboard riêng – ĐƯỢC PHÉP sửa)
+- `SystemUsers` (UserID, Username, PasswordHash, Role)
+
+### MySQL – PAYROLL
+- `employees_payroll` (EmployeeID, FullName, DepartmentID, PositionID, Status, SyncedAt)
+- `departments_payroll` (DepartmentID, DepartmentName, SyncedAt)
+- `positions_payroll` (PositionID, PositionName, SyncedAt)
+- `salaries` (SalaryID, EmployeeID, SalaryMonth, BaseSalary, Bonus, Deductions, NetSalary, CreatedAt)
+- `attendance` (AttendanceID, EmployeeID, AttendanceMonth, WorkDays, LeaveDays, AbsentDays)
+
+> [!CAUTION]
+> **BR-02**: Nghiêm cấm thay đổi cấu trúc bảng của HUMAN_2025 và PAYROLL. Chỉ được sửa bảng trong HUMAN_AUTH.
