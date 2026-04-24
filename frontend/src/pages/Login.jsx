@@ -111,8 +111,7 @@ export default function Login() {
 
                         <div className="mb-4">
                             <div className="d-flex justify-content-between align-items-center mb-2">
-                                <label className="form-label fw-bold text-muted small text-uppercase mb-0" style={{ letterSpacing: '0.05em' }}>Password</label>
-                                <Link to="/forgot-password" className="small text-decoration-none fw-medium" style={{ color: 'var(--primary-color)' }}>Forgot password?</Link>
+                                <label className="form-label fw-bold text-muted small text-uppercase mb-0" style={{ letterSpacing: '0.05em' }}>Password</label>                       
                             </div>
                             <div className="position-relative mt-2">
                                 <i className={`bi bi-lock position-absolute top-50 translate-middle-y ms-3 ${error ? 'text-danger' : 'text-muted'}`}></i>
@@ -124,6 +123,9 @@ export default function Login() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                 />
+                            </div>
+                            <div className="text-end">
+                                <Link to="/forgot-password" className="small text-decoration-none fw-medium" style={{ color: 'var(--primary-color)' }}>Forgot password?</Link>
                             </div>
                         </div>
 

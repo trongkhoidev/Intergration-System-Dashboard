@@ -1,125 +1,121 @@
-import React, { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { getCurrentUser } from '../utils/auth';
+import { API_BASE, fetchAuth } from '../api';
 
 export default function Header() {
-  const [notifications] = useState([
-    { id: 1, title: 'Payroll Cycle Finalized', time: '2h ago', icon: 'bi-check-circle-fill', color: 'text-success' },
-    { id: 2, title: 'New Employee Onboarded', time: '5h ago', icon: 'bi-person-plus-fill', color: 'text-primary' },
-    { id: 3, title: 'Security Patch Deployment', time: '1d ago', icon: 'bi-shield-lock-fill', color: 'text-warning' }
-  ]);
-  
   const user = getCurrentUser();
-  const displayName = user.username || 'Guest';
-  
-  const navigate = useNavigate();
-  const location = useLocation();
+  const displayName = user.username || 'User';
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [alerts, setAlerts] = useState([]);
+  const dropRef = useRef(null);
 
-  // Simple breadcrumb logic
-  const pathParts = location.pathname.split('/').filter(x => x);
-  const pageTitle = pathParts.length > 0 ? pathParts[0].charAt(0).toUpperCase() + pathParts[0].slice(1) : 'Overview';
+  useEffect(() => {
+    fetchAuth(`${API_BASE}/alerts`)
+      .then(r => r.json())
+      .then(data => setAlerts(Array.isArray(data) ? data.slice(0, 5) : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        setShowNotifs(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    navigate('/');
+    fetchAuth(`${API_BASE}/auth/logout`, { method: 'POST' }).finally(() => {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    });
   };
 
+  const severityColor = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+
   return (
-    <nav className="header-glass px-4 py-3 d-flex align-items-center justify-content-between sticky-top">
-      {/* Search & Breadcrumbs */}
-      <div className="d-flex align-items-center gap-4">
-        <div className="d-none d-lg-block">
-           <div className="d-flex align-items-center gap-2 text-muted extra-small fw-bold text-uppercase ls-wide">
-              <span>DataPro</span>
-              <i className="bi bi-chevron-right" style={{ fontSize: '0.6rem' }}></i>
-              <span className="text-dark">{pageTitle}</span>
-           </div>
-        </div>
-        
-        <div className="search-input-wrapper d-none d-md-block" style={{ width: '300px' }}>
-           <i className="bi bi-search position-absolute top-50 translate-middle-y ms-3 text-muted"></i>
-           <input type="text" placeholder="Jump to command or search..." className="bg-light border-0" />
-           <div className="position-absolute top-50 end-0 translate-middle-y me-3 d-flex gap-1">
-              <span className="badge bg-white text-muted border py-1 px-2 extra-small">⌘</span>
-              <span className="badge bg-white text-muted border py-1 px-2 extra-small">K</span>
-           </div>
-        </div>
+    <div className="topbar-area">
+      {/* Search */}
+      <div className="search-wrapper" style={{ flex: 1, maxWidth: 360 }}>
+        <i className="bi bi-search search-icon"></i>
+        <input type="text" placeholder="Search employees, reports..." style={{ paddingRight: 12 }} />
       </div>
 
-      <div className="d-flex align-items-center gap-4">
-        {/* Support Link */}
-        <a href="#" className="btn-icon d-none d-sm-flex" title="Support Documentation">
-           <i className="bi bi-question-circle"></i>
-        </a>
-
+      {/* Right actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
         {/* Notifications */}
-        <div className="dropdown">
-          <div 
-            className="btn-icon position-relative" 
-            role="button" 
-            data-bs-toggle="dropdown" 
-            aria-expanded="false"
+        <div style={{ position: 'relative' }} ref={dropRef}>
+          <button
+            onClick={() => setShowNotifs(!showNotifs)}
+            className="btn-icon"
+            style={{ position: 'relative', fontSize: '1.1rem' }}
           >
             <i className="bi bi-bell"></i>
-            <span className="position-absolute top-0 end-0 translate-middle p-1 bg-danger border border-white rounded-circle" style={{ marginTop: '5px', marginRight: '2px' }}></span>
-          </div>
-          <ul className="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-3 p-0 overflow-hidden glass-card" style={{ width: '320px', borderRadius: '16px' }}>
-            <li className="p-3 border-bottom d-flex justify-content-between align-items-center bg-light bg-opacity-50">
-              <span className="fw-bold text-dark">Recent Activity</span>
-              <span className="badge bg-primary rounded-pill extra-small px-2">3 New</span>
-            </li>
-            <div className="max-h-80 overflow-y-auto">
-              {notifications.map(notif => (
-                <li key={notif.id} className="dropdown-item p-3 border-bottom d-flex align-items-start gap-3 transition-all">
-                  <div className={`mt-1 flex-shrink-0 rounded-3 p-2 bg-light ${notif.color} bg-opacity-10 d-flex align-items-center justify-content-center`}>
-                    <i className={`bi ${notif.icon}`}></i>
+            {alerts.length > 0 && (
+              <span style={{
+                position: 'absolute', top: 4, right: 4,
+                width: 8, height: 8, borderRadius: '50%',
+                background: '#ef4444', border: '2px solid #fff'
+              }}></span>
+            )}
+          </button>
+
+          {showNotifs && (
+            <div style={{
+              position: 'absolute', top: '100%', right: 0, marginTop: 8,
+              width: 320, background: '#fff', borderRadius: 12,
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.12)', zIndex: 500,
+            }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>Alerts</span>
+                <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>{alerts.length}</span>
+              </div>
+              {alerts.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>No active alerts</div>
+              ) : (
+                alerts.map((a, i) => (
+                  <div key={i} style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: severityColor[a.severity] || '#94a3b8',
+                      marginTop: 6, flexShrink: 0
+                    }}></div>
+                    <div>
+                      <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-dark)' }}>{a.type}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{a.message}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="fw-bold text-dark small mb-0">{notif.title}</div>
-                    <div className="text-muted extra-small">{notif.time}</div>
-                  </div>
-                </li>
-              ))}
+                ))
+              )}
+              <Link to="/alerts" onClick={() => setShowNotifs(false)} style={{ display: 'block', padding: '12px 16px', textAlign: 'center', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', textDecoration: 'none', borderTop: '1px solid var(--border-color)' }}>
+                View all alerts →
+              </Link>
             </div>
-            <li className="p-2 text-center">
-              <button className="btn btn-link btn-sm text-decoration-none text-primary fw-bold">View Pipeline Log</button>
-            </li>
-          </ul>
+          )}
         </div>
 
-        {/* User Profile */}
-        <div className="dropdown">
-          <div className="d-flex align-items-center gap-2 hover-lift p-1 rounded-pill pe-2" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <div className="rounded-circle bg-primary bg-opacity-10 text-primary d-flex justify-content-center align-items-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', border: '1px solid var(--primary-light)' }}>
-              {displayName.charAt(0)}
-            </div>
-            <i className="bi bi-chevron-down extra-small text-muted opacity-50"></i>
+        {/* User info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, borderLeft: '1px solid var(--border-color)' }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: 'var(--primary-light)', color: 'var(--primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: '0.875rem'
+          }}>{displayName.charAt(0).toUpperCase()}</div>
+          <div style={{ lineHeight: 1.2 }}>
+            <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-dark)' }}>{displayName}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{user.role}</div>
           </div>
-          <ul className="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-3 p-2 glass-card" style={{ borderRadius: '16px', minWidth: '220px' }}>
-            <li className="px-3 py-3 border-bottom mb-2">
-               <div className="fw-bold text-dark">{displayName}</div>
-               <div className="text-muted extra-small text-capitalize">{user.normalizedRole} Authority</div>
-            </li>
-            <li>
-              <Link className="dropdown-item fw-bold py-2 rounded-3 d-flex align-items-center gap-3" to="/profile">
-                <i className="bi bi-person-circle text-muted"></i> User Profile
-              </Link>
-            </li>
-            <li>
-              <Link className="dropdown-item fw-bold py-2 rounded-3 d-flex align-items-center gap-3" to="/settings">
-                <i className="bi bi-gear-fill text-muted"></i> System Prefs
-              </Link>
-            </li>
-            <li><hr className="dropdown-divider opacity-50 my-2" /></li>
-            <li>
-              <button className="dropdown-item text-danger fw-bold py-2 rounded-3 d-flex align-items-center gap-3" onClick={handleLogout}>
-                <i className="bi bi-box-arrow-right"></i> Sign Out
-              </button>
-            </li>
-          </ul>
+          <button onClick={handleLogout} className="btn-icon btn-danger-icon" title="Logout" style={{ marginLeft: 4 }}>
+            <i className="bi bi-box-arrow-right"></i>
+          </button>
         </div>
       </div>
-    </nav>
+    </div>
   );
 }

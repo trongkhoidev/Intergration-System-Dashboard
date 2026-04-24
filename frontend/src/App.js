@@ -13,6 +13,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import SystemUsers from './pages/SystemUsers';
 import AuditLogs from './pages/AuditLogs';
+import MyPayroll from './pages/MyPayroll';
+import MyAttendance from './pages/MyAttendance';
 import { normalizeRole } from './utils/auth';
 
 function App() {
@@ -34,6 +36,10 @@ function App() {
   const role = normalizeRole(user.role);
 
   // RBAC: Define accessible routes per role
+  // Admin: Full access to ALL features including system management
+  // HR: Employee CRUD, payroll (read-only), attendance, reports, alerts
+  // Payroll: Payroll management, attendance, employee (read-only), reports
+  // Employee: Own profile, own salary history, own attendance only
   const roleRoutes = {
     admin: (
       <>
@@ -66,6 +72,7 @@ function App() {
     payroll: (
       <>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/employees" element={<Employees />} />
         <Route path="/payroll" element={<Payroll />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/reports" element={<Reports />} />
@@ -77,6 +84,8 @@ function App() {
     employee: (
       <>
         <Route path="/profile" element={<Profile />} />
+        <Route path="/my-payroll" element={<MyPayroll />} />
+        <Route path="/my-attendance" element={<MyAttendance />} />
         <Route path="*" element={<Navigate to="/profile" />} />
       </>
     ),

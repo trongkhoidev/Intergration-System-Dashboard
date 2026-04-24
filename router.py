@@ -141,6 +141,23 @@ def update_payroll(salary_id):
         print(f"Error in update_payroll: {e}")
         return jsonify({"status": "error", "msg": "Failed to update payroll"}), 500
 
+@router.route("/api/payroll/<int:emp_id>/history")
+@require_auth()
+def get_payroll_history(emp_id):
+    try:
+        my = get_mysql_connection()
+        cur = my.cursor(dictionary=True)
+        cur.execute("""
+            SELECT SalaryMonth, BaseSalary, Bonus, Deductions, NetSalary 
+            FROM salaries 
+            WHERE EmployeeID = %s 
+            ORDER BY SalaryMonth ASC
+        """, (emp_id,))
+        return jsonify(cur.fetchall())
+    except Exception as e:
+        print(f"Error in get_payroll_history: {e}")
+        return jsonify({"error": "Failed to fetch payroll history"}), 500
+
 @router.route("/api/payroll/summary")
 @require_auth(["Admin", "HR", "Payroll"])
 def get_payroll_summary():
@@ -220,6 +237,25 @@ def get_attendance():
         print(f"Error in get_attendance: {e}")
         return jsonify({"error": "Failed to fetch attendance data"}), 500
 
+@router.route("/api/attendance/<int:emp_id>/summary")
+@require_auth()
+def get_attendance_summary(emp_id):
+    try:
+        my = get_mysql_connection()
+        cur = my.cursor(dictionary=True)
+        cur.execute("""
+            SELECT SUM(WorkDays) as TotalWorkDays, SUM(LeaveDays) as TotalLeaveDays, SUM(AbsentDays) as TotalAbsentDays 
+            FROM attendance 
+            WHERE EmployeeID = %s
+        """, (emp_id,))
+        summary = cur.fetchone()
+        if not summary or summary['TotalWorkDays'] is None:
+            return jsonify({"TotalWorkDays": 0, "TotalLeaveDays": 0, "TotalAbsentDays": 0})
+        return jsonify(summary)
+    except Exception as e:
+        print(f"Error in get_attendance_summary: {e}")
+        return jsonify({"error": "Failed to fetch attendance summary"}), 500
+
 # ============================================================
 # NEW API: DASHBOARD STATS
 # ============================================================
@@ -290,35 +326,35 @@ def get_alerts():
             pass
 
         # 1. Birthday Alerts
-        cur.execute("SELECT FullName FROM Employees WHERE MONTH(DateOfBirth) = MONTH(GETDATE()) AND Status = 'Active'")
+        cur.execute("SELECT EmployeeID, FullName FROM Employees WHERE MONTH(DateOfBirth) = MONTH(GETDATE()) AND Status = 'Active'")
         for r in cur.fetchall():
-            alerts.append({"type": "Birthday", "message": f"It's {r[0]}'s birthday month!", "severity": "info", "date": "This month", "employee": r[0]})
+            alerts.append({"type": "Birthday", "message": f"It's {r[1]}'s birthday month!", "severity": "info", "date": "This month", "employee": r[1], "employeeId": r[0]})
 
         # 2. Work Anniversary Alerts – FR10: 1, 3, 5 year milestones (BR-09: 12,36,60 months)
         cur.execute("""
-            SELECT FullName, HireDate, DATEDIFF(MONTH, HireDate, GETDATE()) AS Months
+            SELECT EmployeeID, FullName, HireDate, DATEDIFF(MONTH, HireDate, GETDATE()) AS Months
             FROM Employees WHERE Status = 'Active'
             AND DATEDIFF(MONTH, HireDate, GETDATE()) IN (12, 36, 60)
         """)
         for r in cur.fetchall():
-            years = r[2] // 12
-            alerts.append({"type": "Work anniversary", "message": f"{r[0]} celebrates {years} year(s) of service", "severity": "info", "date": str(r[1]), "employee": r[0]})
+            years = r[3] // 12
+            alerts.append({"type": "Work anniversary", "message": f"{r[1]} celebrates {years} year(s) of service", "severity": "info", "date": str(r[2]), "employee": r[1], "employeeId": r[0]})
 
         # 3. Excessive Leave – FR11: >12 days/year (BR-19)
         my = get_mysql_connection()
         mcur = my.cursor(dictionary=True)
         mcur.execute("""
-            SELECT e.FullName, SUM(a.LeaveDays) AS TotalLeave
+            SELECT e.EmployeeID, e.FullName, SUM(a.LeaveDays) AS TotalLeave
             FROM attendance a JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
             WHERE e.Status = 'Đang làm việc' OR e.Status = 'Active'
             GROUP BY e.EmployeeID, e.FullName HAVING SUM(a.LeaveDays) > 12
         """)
         for r in mcur.fetchall():
-            alerts.append({"type": "Excessive leave", "message": f"{r['FullName']} exceeded {r['TotalLeave']} annual leave days (limit: 12)", "severity": "warning", "date": "Current year", "employee": r['FullName']})
+            alerts.append({"type": "Excessive leave", "message": f"{r['FullName']} exceeded {r['TotalLeave']} annual leave days (limit: 12)", "severity": "warning", "date": "Current year", "employee": r['FullName'], "employeeId": r['EmployeeID']})
 
         # 4. Salary Anomaly – FR12: >20% change between periods (BR-11)
         mcur.execute("""
-            SELECT e.FullName, s1.NetSalary AS Current, s2.NetSalary AS Previous,
+            SELECT e.EmployeeID, e.FullName, s1.NetSalary AS Current, s2.NetSalary AS Previous,
                    ROUND(ABS(s1.NetSalary - s2.NetSalary) / s2.NetSalary * 100, 1) AS PctChange
             FROM salaries s1
             JOIN salaries s2 ON s1.EmployeeID = s2.EmployeeID AND s1.SalaryID > s2.SalaryID
@@ -328,7 +364,7 @@ def get_alerts():
             ORDER BY s1.SalaryID DESC LIMIT 10
         """)
         for r in mcur.fetchall():
-            alerts.append({"type": "Salary anomaly", "message": f"Unusual salary change for {r['FullName']}: {r['PctChange']}% difference", "severity": "critical", "date": "Recent", "employee": r['FullName']})
+            alerts.append({"type": "Salary anomaly", "message": f"Unusual salary change for {r['FullName']}: {r['PctChange']}% difference", "severity": "critical", "date": "Recent", "employee": r['FullName'], "employeeId": r['EmployeeID']})
 
         return jsonify(alerts)
     except Exception as e:
@@ -528,21 +564,29 @@ def get_employees():
         sql = get_sqlserver_connection()
         cur = sql.cursor()
         cur.execute("""
-            SELECT e.EmployeeID, e.FullName, d.DepartmentName, p.PositionName, e.Status, e.Email
+            SELECT e.EmployeeID, e.FullName, e.DateOfBirth, e.Gender, e.PhoneNumber, e.Email, e.HireDate, 
+                   e.DepartmentID, d.DepartmentName, e.PositionID, p.PositionName, e.Status
             FROM Employees e
             LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID
             LEFT JOIN Positions p ON e.PositionID = p.PositionID
-            ORDER BY e.EmployeeID
+            ORDER BY e.EmployeeID DESC
         """)
+        
         rows = []
         for r in cur.fetchall():
             rows.append({
                 "EmployeeID": r[0],
                 "FullName": r[1],
-                "Department": r[2] if r[2] else None,
-                "Position": r[3] if r[3] else None,
-                "Status": r[4] if r[4] else "Active",
-                "Email": r[5] if r[5] else None
+                "DateOfBirth": str(r[2]) if r[2] else None,
+                "Gender": r[3],
+                "PhoneNumber": r[4],
+                "Email": r[5],
+                "HireDate": str(r[6]) if r[6] else None,
+                "DepartmentID": r[7],
+                "Department": r[8] if r[8] else None,
+                "PositionID": r[9],
+                "Position": r[10] if r[10] else None,
+                "Status": r[11] if r[11] else "Active"
             })
         return jsonify(rows)
     except Exception as e:
@@ -717,7 +761,19 @@ def delete_employee(emp_id):
         sql.autocommit = False
         my.start_transaction()
 
+        # Validation: check if Dividends exist
         cur = sql.cursor()
+        cur.execute("SELECT COUNT(*) FROM Dividends WHERE EmployeeID = ?", (emp_id,))
+        if cur.fetchone()[0] > 0:
+            return jsonify({"status": "error", "msg": "Cannot delete: Employee has dividend records"}), 409
+
+        # Validation: check if Salaries exist
+        my_cur = my.cursor()
+        my_cur.execute("SELECT COUNT(*) FROM salaries WHERE EmployeeID = %s", (emp_id,))
+        if my_cur.fetchone()[0] > 0:
+            return jsonify({"status": "error", "msg": "Cannot delete: Employee has salary records"}), 409
+
+        # BR-05: Soft delete only – set Status to 'Inactive'
         cur.execute("UPDATE Employees SET Status = 'Inactive' WHERE EmployeeID=?", (emp_id,))
 
         my_cur = my.cursor()
@@ -776,51 +832,81 @@ def get_dividends_summary():
 # ============================================================
 # API: PROFILE (FR – User Profile)
 # ============================================================
-@router.route("/api/profile")
+@router.route("/api/profile", methods=["GET", "PUT"])
 @require_auth()
-def get_profile():
-    """Get current user profile info linked to Employees table."""
+def profile_handler():
     auth_header = request.headers.get("Authorization", "")
     from jwt_utils import decode_token
     token = auth_header.split(" ", 1)[1] if auth_header.startswith("Bearer ") else ""
     payload = decode_token(token) if token else None
-    username = payload.get("username") if payload else request.args.get("username", "admin")
+    
+    if not payload:
+        return jsonify({"msg": "Unauthorized"}), 401
+        
+    username = payload.get("username")
+    email = payload.get("email")
 
-    try:
-        auth = get_auth_connection()
-        cur = auth.cursor()
-        cur.execute("SELECT UserID, Username, Email, Role FROM SystemUsers WHERE Username = ?", (username,))
-        row = cur.fetchone()
-        if not row:
-            return jsonify({"msg": "User not found"}), 404
+    if request.method == "GET":
+        try:
+            auth = get_auth_connection()
+            cur = auth.cursor()
+            cur.execute("SELECT UserID, Username, Email, Role FROM SystemUsers WHERE Username = ?", (username,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"msg": "User not found"}), 404
 
-        user_info = {"UserID": row[0], "Username": row[1], "Email": row[2] or "", "Role": row[3]}
+            user_info = {"UserID": row[0], "Username": row[1], "Email": row[2] or "", "Role": row[3]}
 
-        # Try to find matching employee by email
-        if user_info["Email"]:
-            sql = get_sqlserver_connection()
-            ecur = sql.cursor()
-            ecur.execute("""
-                SELECT e.FullName, e.Email, e.PhoneNumber, e.DateOfBirth, e.Gender, e.HireDate, e.Status,
-                       d.DepartmentName, p.PositionName
-                FROM Employees e
-                LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID
-                LEFT JOIN Positions p ON e.PositionID = p.PositionID
-                WHERE e.Email = ?
-            """, (user_info["Email"],))
-            emp = ecur.fetchone()
-            if emp:
-                user_info.update({
-                    "FullName": emp[0], "PhoneNumber": emp[2],
-                    "DateOfBirth": str(emp[3]) if emp[3] else None,
-                    "Gender": emp[4], "HireDate": str(emp[5]) if emp[5] else None,
-                    "Status": emp[6], "Department": emp[7], "Position": emp[8]
-                })
+            # Try to find matching employee by email
+            if user_info["Email"]:
+                sql = get_sqlserver_connection()
+                ecur = sql.cursor()
+                ecur.execute("""
+                    SELECT e.FullName, e.Email, e.PhoneNumber, e.DateOfBirth, e.Gender, e.HireDate, e.Status,
+                           d.DepartmentName, p.PositionName
+                    FROM Employees e
+                    LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID
+                    LEFT JOIN Positions p ON e.PositionID = p.PositionID
+                    WHERE e.Email = ?
+                """, (user_info["Email"],))
+                emp = ecur.fetchone()
+                if emp:
+                    user_info.update({
+                        "FullName": emp[0], "PhoneNumber": emp[2],
+                        "DateOfBirth": str(emp[3]) if emp[3] else None,
+                        "Gender": emp[4], "HireDate": str(emp[5]) if emp[5] else None,
+                        "Status": emp[6], "Department": emp[7], "Position": emp[8]
+                    })
+            return jsonify(user_info)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
-        return jsonify(user_info)
-    except Exception as e:
-        print(f"Error in get_profile: {e}")
-        return jsonify({"error": str(e)}), 500
+    elif request.method == "PUT":
+        data = request.json
+        full_name = data.get("FullName")
+        phone = data.get("PhoneNumber")
+        
+        try:
+            # 1. Update SQL Server Employees table if email matches
+            if email:
+                sql = get_sqlserver_connection()
+                sql.autocommit = True
+                cur = sql.cursor()
+                cur.execute("UPDATE Employees SET FullName = ?, PhoneNumber = ? WHERE Email = ?", 
+                           (full_name, phone, email))
+                
+                # 2. Update MySQL employees_payroll table
+                my = get_mysql_connection()
+                my.autocommit = True
+                mcur = my.cursor()
+                mcur.execute("UPDATE employees_payroll SET FullName = %s WHERE EmployeeID = (SELECT EmployeeID FROM (SELECT EmployeeID FROM employees_payroll WHERE Email = %s OR FullName = %s LIMIT 1) as t)", 
+                            (full_name, email, full_name))
+            
+            log_audit("PROFILE_UPDATED", username, f"Updated FullName to {full_name}")
+            return jsonify({"status": "success", "msg": "Profile updated successfully"})
+        except Exception as e:
+            print(f"Error updating profile: {e}")
+            return jsonify({"status": "error", "msg": str(e)}), 500
 
 
 # ============================================================
@@ -867,18 +953,37 @@ def report_payroll():
 @router.route("/api/reports/attendance")
 @require_auth(["Admin", "HR", "Payroll"])
 def report_attendance():
-    """FR9: Attendance summary by department."""
+    """FR9: Attendance summary by employee."""
     try:
         my = get_mysql_connection()
         cur = my.cursor(dictionary=True)
         cur.execute("""
-            SELECT e.DepartmentID, SUM(a.WorkDays) AS TotalWork, SUM(a.LeaveDays) AS TotalLeave, SUM(a.AbsentDays) AS TotalAbsent
-            FROM attendance a JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
-            GROUP BY e.DepartmentID
+            SELECT e.FullName, SUM(a.LeaveDays) as TotalLeave, SUM(a.AbsentDays) as TotalAbsent
+            FROM attendance a
+            JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
+            GROUP BY e.FullName
+            ORDER BY TotalAbsent DESC, TotalLeave DESC
+            LIMIT 10
         """)
         return jsonify(cur.fetchall())
     except Exception as e:
         print(f"Error report_attendance: {e}")
+        return jsonify([])
+
+@router.route("/api/reports/dividends")
+@require_auth(["Admin", "HR", "Payroll"])
+def report_dividends():
+    try:
+        sql = get_sqlserver_connection()
+        cur = sql.cursor()
+        try:
+            cur.execute("SELECT e.FullName, d.Amount FROM Dividends d JOIN Employees e ON d.EmployeeID = e.EmployeeID")
+            data = [{"FullName": row[0], "Amount": row[1]} for row in cur.fetchall()]
+            return jsonify(data)
+        except Exception:
+            return jsonify([])
+    except Exception as e:
+        print(f"Error report_dividends: {e}")
         return jsonify([])
 
 
@@ -979,6 +1084,7 @@ def update_user(uid):
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 
+
 @router.route("/api/users/<int:uid>", methods=["DELETE"])
 @require_auth(["Admin"])
 def delete_user(uid):
@@ -990,3 +1096,138 @@ def delete_user(uid):
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "msg": str(e)}), 500
+
+
+# ============================================================
+# API: AUTH LOGOUT (Ghi log Audit)
+# ============================================================
+@router.route("/api/auth/logout", methods=["POST"])
+@require_auth()
+def auth_logout():
+    user_data = getattr(request, 'current_user', {})
+    username = user_data.get('username', 'unknown')
+    log_audit("LOGOUT", username, f"User logged out")
+    return jsonify({"status": "success", "msg": "Logged out"})
+
+
+# ============================================================
+# API: EMPLOYEE SELF-SERVICE (Employee role – own data only)
+# ============================================================
+@router.route("/api/my/payroll")
+@require_auth()
+def my_payroll():
+    """Employee xem lịch sử lương của chính mình."""
+    user_data = getattr(request, 'current_user', {})
+    email = user_data.get('email', '')
+    if not email:
+        return jsonify([])
+    try:
+        # Find EmployeeID from SQL Server by email
+        sql = get_sqlserver_connection()
+        scur = sql.cursor()
+        scur.execute("SELECT EmployeeID FROM Employees WHERE Email = ?", (email,))
+        row = scur.fetchone()
+        if not row:
+            return jsonify([])
+        emp_id = row[0]
+
+        # Get salary records from MySQL
+        my = get_mysql_connection()
+        mcur = my.cursor(dictionary=True)
+        mcur.execute("""
+            SELECT SalaryMonth, BaseSalary, Bonus, Deductions, NetSalary
+            FROM salaries WHERE EmployeeID = %s ORDER BY SalaryMonth DESC
+        """, (emp_id,))
+        rows = mcur.fetchall()
+        for r in rows:
+            if r.get('SalaryMonth'):
+                r['SalaryMonth'] = str(r['SalaryMonth'])
+        return jsonify(rows)
+    except Exception as e:
+        print(f"Error my_payroll: {e}")
+        return jsonify([])
+
+
+@router.route("/api/my/attendance")
+@require_auth()
+def my_attendance():
+    """Employee xem lịch sử chấm công của chính mình."""
+    user_data = getattr(request, 'current_user', {})
+    email = user_data.get('email', '')
+    if not email:
+        return jsonify([])
+    try:
+        sql = get_sqlserver_connection()
+        scur = sql.cursor()
+        scur.execute("SELECT EmployeeID FROM Employees WHERE Email = ?", (email,))
+        row = scur.fetchone()
+        if not row:
+            return jsonify([])
+        emp_id = row[0]
+
+        my = get_mysql_connection()
+        mcur = my.cursor(dictionary=True)
+        mcur.execute("""
+            SELECT AttendanceMonth, WorkDays, LeaveDays, AbsentDays
+            FROM attendance WHERE EmployeeID = %s ORDER BY AttendanceMonth DESC
+        """, (emp_id,))
+        rows = mcur.fetchall()
+        for r in rows:
+            if r.get('AttendanceMonth'):
+                r['AttendanceMonth'] = str(r['AttendanceMonth'])
+        return jsonify(rows)
+    except Exception as e:
+        print(f"Error my_attendance: {e}")
+        return jsonify([])
+
+
+# ============================================================
+# API: EMPLOYEE SUMMARY (Unified HR + Payroll + Attendance)
+# ============================================================
+@router.route("/api/employees/<int:emp_id>/summary")
+@require_auth(["Admin", "HR", "Payroll"])
+def get_employee_summary(emp_id):
+    """Lấy dữ liệu tổng hợp 1 nhân viên từ cả 3 nguồn."""
+    try:
+        sql = get_sqlserver_connection()
+        cur = sql.cursor()
+        cur.execute("""
+            SELECT e.FullName, e.Email, e.PhoneNumber, e.Status,
+                   d.DepartmentName, p.PositionName, e.HireDate
+            FROM Employees e
+            LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID
+            LEFT JOIN Positions p ON e.PositionID = p.PositionID
+            WHERE e.EmployeeID = ?
+        """, (emp_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        hr = {
+            "FullName": row[0], "Email": row[1], "PhoneNumber": row[2],
+            "Status": row[3], "Department": row[4], "Position": row[5],
+            "HireDate": str(row[6]) if row[6] else None
+        }
+
+        my = get_mysql_connection()
+        mcur = my.cursor(dictionary=True)
+
+        mcur.execute("""
+            SELECT SalaryMonth, BaseSalary, Bonus, Deductions, NetSalary
+            FROM salaries WHERE EmployeeID = %s ORDER BY SalaryMonth DESC LIMIT 1
+        """, (emp_id,))
+        payroll = mcur.fetchone()
+        if payroll and payroll.get('SalaryMonth'):
+            payroll['SalaryMonth'] = str(payroll['SalaryMonth'])
+
+        mcur.execute("""
+            SELECT SUM(WorkDays) as TotalWork, SUM(LeaveDays) as TotalLeave, SUM(AbsentDays) as TotalAbsent
+            FROM attendance WHERE EmployeeID = %s
+        """, (emp_id,))
+        attendance = mcur.fetchone()
+
+        return jsonify({"hr": hr, "payroll": payroll, "attendance": attendance})
+    except Exception as e:
+        print(f"Error employee_summary: {e}")
+        return jsonify({"error": str(e)}), 500
+
+

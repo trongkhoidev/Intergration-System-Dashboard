@@ -1,211 +1,302 @@
 import { useEffect, useState } from 'react';
 import { API_BASE, fetchAuth } from '../api';
 import { getCurrentUser } from '../utils/auth';
-import { getStatusPresentation } from '../utils/status';
+
+const ROLE_LABELS = {
+  Admin: 'System Administrator',
+  admin: 'System Administrator',
+  HR: 'HR Manager',
+  hr: 'HR Manager',
+  Payroll: 'Payroll Manager',
+  payroll: 'Payroll Manager',
+  Employee: 'Staff Member',
+  employee: 'Staff Member',
+};
 
 export default function Profile() {
   const user = getCurrentUser();
-  
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
   const [profileData, setProfileData] = useState(null);
-  const displayName = profileData?.FullName || user.username;
+  const [showPwModal, setShowPwModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [pwForm, setPwForm] = useState({ new_pw: '', confirm_pw: '' });
+  const [editForm, setEditForm] = useState({ FullName: '', PhoneNumber: '' });
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [toast, setToast] = useState(null);
 
-  useEffect(() => {
+  const fetchProfile = () => {
     fetchAuth(`${API_BASE}/profile`)
-      .then(res => res.json())
-      .then(data => setProfileData(data))
-      .catch(err => console.error(err));
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    window.location.href = '/';
+      .then(r => r.json())
+      .then(d => {
+        setProfileData(d);
+        setEditForm({
+          FullName: d.FullName || '',
+          PhoneNumber: d.PhoneNumber || ''
+        });
+      })
+      .catch(console.error);
   };
 
-  const handlePasswordUpdate = (e) => {
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const showToast = (text, type = 'success') => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleLogout = () => {
+    fetchAuth(`${API_BASE}/auth/logout`, { method: 'POST' }).finally(() => {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    });
+  };
+
+  const handleChangePassword = (e) => {
     e.preventDefault();
-    if (passwordForm.new !== passwordForm.confirm) {
-      setMessage({ type: 'critical', text: 'Security keys do not match' });
+    if (pwForm.new_pw !== pwForm.confirm_pw) {
+      setMsg({ type: 'danger', text: 'Passwords do not match!' });
       return;
     }
-    
     setLoading(true);
     fetchAuth(`${API_BASE}/password`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: user.username,
-        new_password: passwordForm.new
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
+      body: JSON.stringify({ username: user.username, new_password: pwForm.new_pw }),
+    }).then(r => r.json()).then(d => {
       setLoading(false);
-      if (data.status === 'success') {
-        setMessage({ type: 'info', text: 'Authentication key successfully rotated.' });
-        setTimeout(() => setShowPasswordModal(false), 2000);
+      if (d.status === 'success') {
+        showToast('Password updated successfully!');
+        setShowPwModal(false);
+        setPwForm({ new_pw: '', confirm_pw: '' });
+        setMsg(null);
       } else {
-        setMessage({ type: 'critical', text: data.msg });
+        setMsg({ type: 'danger', text: d.msg || 'Failed to update password' });
       }
     });
   };
 
+  const handleUpdateProfile = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    fetchAuth(`${API_BASE}/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(editForm),
+    }).then(r => r.json()).then(d => {
+      setLoading(false);
+      if (d.status === 'success') {
+        showToast('Profile updated successfully!');
+        setShowEditModal(false);
+        fetchProfile();
+      } else {
+        showToast(d.msg || 'Update failed', 'danger');
+      }
+    });
+  };
+
+  const displayName = profileData?.FullName || user.username;
+
   return (
-    <div className="pb-5">
-      {/* Header Profile Area */}
-      <div className="animate-slide-up position-relative mb-5">
-        <div style={{ 
-            height: '180px', 
-            background: 'linear-gradient(135deg, var(--primary-color) 0%, #a855f7 100%)', 
-            borderRadius: '24px',
-            boxShadow: 'inset 0 0 50px rgba(0,0,0,0.1)'
-        }}></div>
-        
-        <div className="d-flex flex-column flex-md-row align-items-md-end px-5" style={{ marginTop: '-60px' }}>
-          <div className="rounded-circle bg-white p-1 shadow-lg me-md-4 mb-3 mb-md-0" style={{ width: '130px', height: '130px' }}>
-            <div className="rounded-circle bg-primary bg-opacity-10 text-primary d-flex justify-content-center align-items-center fw-bold h-100 w-100" style={{ fontSize: '3.5rem', border: '2px solid var(--primary-light)' }}>
-              {displayName.charAt(0).toUpperCase()}
+    <div className="animate-fade-in">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="toast-container" style={{ top: 80, right: 30 }}>
+          <div className={`toast-premium alert-${toast.type}`}>
+            <i className={`bi bi-${toast.type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'}`}></i>
+            <div>
+              <div className="fw-bold">{toast.type === 'success' ? 'Success' : 'Error'}</div>
+              <div className="small opacity-75">{toast.text}</div>
             </div>
           </div>
-          <div className="pb-md-3">
-             <h2 className="fw-bold text-dark mb-1 tracking-tight">{displayName}</h2>
-             <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-1 fw-bold text-uppercase small">
-                    {user.normalizedRole === 'admin' ? 'System Administrator' : 'Staff Member'}
-                </span>
-                <span className="text-muted small fw-medium">@{user.username.toLowerCase()}</span>
-             </div>
-          </div>
-          <div className="ms-auto pb-md-3">
-             <button className="btn btn-primary-custom px-4 shadow-sm fw-bold" onClick={() => setShowPasswordModal(true)}>
-                <i className="bi bi-shield-lock me-2"></i> Update Security
-             </button>
-          </div>
+        </div>
+      )}
+
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">My Account</h1>
+          <p className="page-subtitle">Manage your personal information and security settings</p>
+        </div>
+        <div className="d-flex gap-2">
+          <button className="btn btn-outline" onClick={() => setShowEditModal(true)}>
+            <i className="bi bi-pencil-square me-2"></i> Edit Profile
+          </button>
+          <button className="btn btn-premium" onClick={() => setShowPwModal(true)}>
+            <i className="bi bi-shield-lock me-2"></i> Security
+          </button>
         </div>
       </div>
-      
-      <div className="row g-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        <div className="col-12 col-xl-8">
-           <div className="table-container p-0 border-0 shadow-sm glass-card">
-              <div className="p-4 border-bottom bg-light bg-opacity-25">
-                 <h5 className="fw-bold mb-0">System Identity Information</h5>
-              </div>
-              <div className="p-4 p-md-5">
-                 <div className="row g-5">
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Full Identity Name</label>
-                       <div className="h5 fw-bold text-dark">{displayName}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Corporate Communication</label>
-                       <div className="h5 fw-bold text-dark text-lowercase">{profileData?.Email || `${user.username}@integration.internal`}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Structural Unit</label>
-                       <div className="h5 fw-bold text-dark">{profileData?.Department || 'N/A'} - {profileData?.Position || 'N/A'}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Access Permissions</label>
-                       <div className="h5 fw-bold text-primary">Role: {user.role}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Phone Number</label>
-                       <div className="h5 fw-bold text-dark">{profileData?.PhoneNumber || 'Not Provided'}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Gender</label>
-                       <div className="h5 fw-bold text-dark">{profileData?.Gender || 'N/A'}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Date of Birth</label>
-                       <div className="h5 fw-bold text-dark">{profileData?.DateOfBirth || 'N/A'}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Hire Date</label>
-                       <div className="h5 fw-bold text-dark">{profileData?.HireDate || 'N/A'}</div>
-                    </div>
-                    <div className="col-md-6">
-                       <label className="stat-label small d-block mb-1 text-uppercase ls-wide">Employment Status</label>
-                       <div className="h5 fw-bold text-dark">
-                          {(() => {
-                            const status = getStatusPresentation(profileData?.Status);
-                            return <span className={`badge-custom ${status.className}`}>{status.label}</span>;
-                          })()}
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
 
-           <div className="mt-4 p-4 rounded-4 border border-dashed text-center animate-fade-in" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--secondary-color)' }}>
-              <div className="d-flex align-items-center justify-content-center gap-2 text-muted small fw-medium">
-                 <i className="bi bi-shield-check-fill text-success fs-5"></i>
-                 Authorized account since 2024. Your credentials are encrypted using industry standard AES-256.
+      <div className="card border-0 p-0 overflow-hidden shadow-md">
+        <div className="profile-cover"></div>
+        <div className="px-5 pb-5">
+          <div className="d-flex justify-content-between align-items-end" style={{ marginTop: -40 }}>
+            <div className="profile-avatar-wrapper">
+              <div className="profile-avatar-large">
+                {displayName.charAt(0).toUpperCase()}
               </div>
-           </div>
-        </div>
-
-        <div className="col-12 col-xl-4">
-           <div className="card-custom border-0 shadow-sm glass-card text-center py-5 px-4">
-              <h5 className="fw-bold mb-4">Logout Sequence</h5>
-              <p className="text-muted small mb-5">By signing out, you will invalidate your current session tokens across all active tabs.</p>
-              
-              <button className="btn btn-outline-danger w-100 py-3 fw-bold rounded-3 border-2" onClick={handleLogout}>
-                 <i className="bi bi-person-x-fill me-2"></i> Terminate Session
+            </div>
+            <div className="d-flex gap-2 mb-2">
+               <button className="btn btn-danger btn-sm" onClick={handleLogout}>
+                <i className="bi bi-box-arrow-right"></i> Sign Out
               </button>
-           </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 60 }}>
+            <div className="row">
+              <div className="col-lg-4">
+                <h3 className="fw-800 text-dark mb-1">{displayName}</h3>
+                <p className="text-muted mb-3">@{user.username} • <span className="badge badge-info">{ROLE_LABELS[user.role] || user.role}</span></p>
+                
+                <div className="bg-light p-3 rounded-4 mb-4">
+                  <div className="small text-muted text-uppercase fw-bold mb-2 ls-1">Quick Access</div>
+                  <div className="d-grid gap-2">
+                    <div className="d-flex align-items-center gap-3 p-2 bg-white rounded-3 border">
+                      <div className="avatar bg-primary-light text-primary"><i className="bi bi-envelope"></i></div>
+                      <div className="overflow-hidden">
+                        <div className="small text-muted">Email</div>
+                        <div className="fw-600 text-truncate">{profileData?.Email || user.email}</div>
+                      </div>
+                    </div>
+                    <div className="d-flex align-items-center gap-3 p-2 bg-white rounded-3 border">
+                      <div className="avatar bg-success-light text-success"><i className="bi bi-telephone"></i></div>
+                      <div>
+                        <div className="small text-muted">Phone</div>
+                        <div className="fw-600">{profileData?.PhoneNumber || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-lg-8">
+                <div className="card bg-white border h-100">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h5 className="fw-bold m-0 text-primary">Job Information</h5>
+                    <span className={`badge ${profileData?.Status === 'Active' ? 'badge-active' : 'badge-inactive'}`}>
+                      {profileData?.Status || 'Active'}
+                    </span>
+                  </div>
+                  
+                  <div className="profile-info-grid mt-0">
+                    <div className="profile-info-item">
+                      <div className="profile-info-label">Department</div>
+                      <div className="profile-info-value">{profileData?.Department || 'Not Assigned'}</div>
+                    </div>
+                    <div className="profile-info-item">
+                      <div className="profile-info-label">Position</div>
+                      <div className="profile-info-value">{profileData?.Position || 'Not Assigned'}</div>
+                    </div>
+                    <div className="profile-info-item">
+                      <div className="profile-info-label">Hire Date</div>
+                      <div className="profile-info-value">
+                        {profileData?.HireDate ? new Date(profileData.HireDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
+                      </div>
+                    </div>
+                    <div className="profile-info-item">
+                      <div className="profile-info-label">Gender</div>
+                      <div className="profile-info-value">{profileData?.Gender || '—'}</div>
+                    </div>
+                    <div className="profile-info-item">
+                      <div className="profile-info-label">Date of Birth</div>
+                      <div className="profile-info-value">
+                         {profileData?.DateOfBirth ? new Date(profileData.DateOfBirth).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Modern Password Update Modal */}
-      {showPasswordModal && (
-        <div className="modal-backdrop-custom animate-fade-in" style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)' }}>
-           <div className="modal-content-custom bg-white" style={{ maxWidth: '480px' }}>
-              <div className="modal-header-custom border-0 pb-0">
-                 <h5 className="fw-bold mb-0">Identity Rotation</h5>
-                 <button className="btn-close-custom" onClick={() => setShowPasswordModal(false)}>
-                    <i className="bi bi-x-lg"></i>
-                 </button>
+      {/* Edit Profile Modal */}
+      {showEditModal && (
+        <div className="modal-overlay">
+          <div className="modal-box animate-in" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Personal Details</h3>
+              <button className="btn-icon" onClick={() => setShowEditModal(false)}>
+                <i className="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <form onSubmit={handleUpdateProfile}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    type="text" required className="form-control"
+                    value={editForm.FullName}
+                    onChange={e => setEditForm({ ...editForm, FullName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <input
+                    type="text" className="form-control"
+                    value={editForm.PhoneNumber}
+                    onChange={e => setEditForm({ ...editForm, PhoneNumber: e.target.value })}
+                  />
+                </div>
               </div>
-              <div className="modal-body-custom pt-4">
-                 <div className="text-center mb-5">
-                    <div className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-4 border border-primary border-opacity-10 shadow-sm" style={{ width: '80px', height: '80px' }}>
-                       <i className="bi bi-key-fill fs-2"></i>
-                    </div>
-                    <h4 className="fw-bold mb-1">Rotate Access Key</h4>
-                    <p className="text-muted extra-small">Periodic rotation prevents unauthorized access to system identifiers.</p>
-                 </div>
-
-                 {message && (
-                    <div className={`p-3 rounded-3 mb-4 animate-slide-up fw-bold small severity-${message.type}`}>
-                       <i className={`bi bi-${message.type === 'info' ? 'shield-check' : 'shield-exclamation'} me-2`}></i>
-                       {message.text}
-                    </div>
-                 )}
-
-                 <form onSubmit={handlePasswordUpdate}>
-                    <div className="mb-4">
-                       <label className="form-label stat-label small text-uppercase">New Keyphrase</label>
-                       <input type="password" required className="form-control form-control-custom py-3" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} />
-                    </div>
-                    <div className="mb-5">
-                       <label className="form-label stat-label small text-uppercase">Confirm Pattern</label>
-                       <input type="password" required className="form-control form-control-custom py-3" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} />
-                    </div>
-
-                    <div className="d-grid shadow-sm rounded-3 overflow-hidden">
-                       <button type="submit" disabled={loading} className="btn btn-primary-custom py-3 fw-bold">
-                          {loading ? <span className="spinner-border spinner-border-sm me-2"></span> : <i className="bi bi-lightning-fill me-2"></i>}
-                          Confirm Identity Update
-                       </button>
-                    </div>
-                 </form>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading && <span className="spinner-border spinner-border-sm me-2"></span>}
+                  Save Changes
+                </button>
               </div>
-           </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showPwModal && (
+        <div className="modal-overlay">
+          <div className="modal-box animate-in" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Security Settings</h3>
+              <button className="btn-icon" onClick={() => { setShowPwModal(false); setMsg(null); }}>
+                <i className="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <form onSubmit={handleChangePassword}>
+              <div className="modal-body">
+                {msg && (
+                  <div className={`alert-box alert-${msg.type} mb-3`}>
+                    <i className={`bi bi-${msg.type === 'success' ? 'check-circle' : 'exclamation-triangle'}`}></i>
+                    {msg.text}
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">New Password</label>
+                  <input
+                    type="password" required className="form-control"
+                    value={pwForm.new_pw}
+                    onChange={e => setPwForm({ ...pwForm, new_pw: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Confirm Password</label>
+                  <input
+                    type="password" required className="form-control"
+                    value={pwForm.confirm_pw}
+                    onChange={e => setPwForm({ ...pwForm, confirm_pw: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setShowPwModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading && <span className="spinner-border spinner-border-sm me-2"></span>}
+                  Update Password
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
