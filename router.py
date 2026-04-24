@@ -1,6 +1,6 @@
 # ============================================================
 # ROUTER - Flask API cho Data Integration Dashboard
-# Kết nối SQL Server (HUMAN_2025) + MySQL (PAYROLL)
+# Kết nối SQL Server (HUMAN) + MySQL (PAYROLL)
 # JWT Authentication + RBAC + Audit Logging
 # ============================================================
 from flask import Blueprint, jsonify, request

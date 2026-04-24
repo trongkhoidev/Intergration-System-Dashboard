@@ -3,6 +3,7 @@ import { Line } from 'react-chartjs-2';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
 import ExportModal from '../components/ExportModal';
+import PayslipModal from '../components/PayslipModal';
 import Skeleton, { TableSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { API_BASE, fetchAuth } from '../api';
@@ -13,6 +14,7 @@ export default function Payroll() {
   const [summary, setSummary] = useState({ TotalPayroll: 0, AvgSalary: 0 });
   const [loading, setLoading] = useState(true);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('All Months');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -128,7 +130,7 @@ export default function Payroll() {
                       </div>
                     </td>
                     <td className="text-end">
-                       <button className="btn-icon">
+                       <button className="btn-icon" onClick={() => setSelectedPayslip(p)}>
                           <i className="bi bi-file-earmark-pdf"></i>
                        </button>
                     </td>
@@ -150,6 +152,12 @@ export default function Payroll() {
         columns={[{ header: 'Employee', key: 'FullName' }, { header: 'Net Salary', key: 'TotalSalary' }]}
         data={filteredData}
         filename="Executive_Payroll"
+      />
+
+      <PayslipModal
+        isOpen={!!selectedPayslip}
+        onClose={() => setSelectedPayslip(null)}
+        data={selectedPayslip}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE } from '../api';
+import { API_BASE, fetchAuth } from '../api';
 
 export default function AddEmployeeModal({ isOpen, onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -22,11 +22,11 @@ export default function AddEmployeeModal({ isOpen, onClose, onSave }) {
     if (isOpen) {
       // Fetch dynamic data for dropdowns
       Promise.all([
-        fetch(`${API_BASE}/departments`).then(res => res.json()),
-        fetch(`${API_BASE}/positions`).then(res => res.json())
+        fetchAuth(`${API_BASE}/departments`).then(res => res.json()),
+        fetchAuth(`${API_BASE}/positions`).then(res => res.json())
       ]).then(([depts, posts]) => {
-        setDepartments(depts);
-        setPositions(posts);
+        setDepartments(Array.isArray(depts) ? depts : []);
+        setPositions(Array.isArray(posts) ? posts : []);
       }).catch(err => console.error("Error loading dropdown data:", err));
     }
   }, [isOpen]);
@@ -35,7 +35,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onSave }) {
     e.preventDefault();
     setLoading(true);
     
-    fetch(`${API_BASE}/employees`, {
+    fetchAuth(`${API_BASE}/employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData)

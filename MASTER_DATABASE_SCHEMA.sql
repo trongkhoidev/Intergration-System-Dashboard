@@ -7,14 +7,14 @@ Phục vụ cho việc Clone dự án và Setup môi trường local nhanh chón
 Dự án sử dụng mô hình Mixed Database (SQL Server & MySQL).
 
 DANH SÁCH DATABASE CẦN CÓ:
-1. SQL Server - Database Chính (Mặc định: HUMAN_2025)
+1. SQL Server - Database Chính (Mặc định: HUMAN)
 2. SQL Server - Database Auth (Mặc định: HUMAN_AUTH) -> [MỚI THÊM]
 3. MySQL     - Database Payroll (Mặc định: PAYROLL)
 
 --------------------------------------------------------------------------------
 HƯỚNG DẪN CẤU HÌNH .env:
 SQL_SERVER=your_server_name
-SQL_DATABASE=HUMAN_2025
+SQL_DATABASE=HUMAN
 SQL_AUTH_DATABASE=HUMAN_AUTH
 SQL_USER=your_username
 SQL_PASSWORD=your_password
@@ -26,15 +26,15 @@ MYSQL_DATABASE=PAYROLL
 */
 
 -- #############################################################################
--- # SECTION 1: SQL SERVER - MAIN DATABASE (HUMAN_2025)
+-- # SECTION 1: SQL SERVER - MAIN DATABASE (HUMAN)
 -- # Mục đích: Quản lý thông tin nhân sự, phòng ban, chức vụ.
 -- #############################################################################
 
 -- 1. Tạo Database
-IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'HUMAN_2025')
-CREATE DATABASE HUMAN_2025;
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'HUMAN')
+CREATE DATABASE HUMAN;
 GO
-USE HUMAN_2025;
+USE HUMAN;
 GO
 
 -- 2. Bảng Departments (Phòng ban)
@@ -178,6 +178,6 @@ CREATE TABLE IF NOT EXISTS salaries (
 -- 2. Thêm mới BẢNG [SystemUsers] chứa tài khoản Login.
 -- 3. Cập nhật BẢNG [Employees] trong SQL Server thêm field [Status] (Active/Inactive).
 -- 4. BỔ SUNG CƠ CHẾ ĐỒNG BỘ: Mọi thao tác Thêm/Sửa/Xóa Nhân viên đều được 
---    thực hiện song song trên [HUMAN_2025.Employees] và [PAYROLL.employees_payroll] 
+--    thực hiện song song trên [HUMAN.Employees] và [PAYROLL.employees_payroll] 
 --    thông qua API (2-Phase Commit giả lập trong router.py).
 -- ================================================================================

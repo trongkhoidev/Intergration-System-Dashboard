@@ -17,12 +17,17 @@ load_env()
 def get_sqlserver_connection():
     """Kết nối SQL Server bằng pyodbc"""
     try:
+        sql_user = os.environ.get('SQL_USER')
+        if sql_user:
+            auth_str = f"UID={sql_user};PWD={os.environ.get('SQL_PASSWORD')};"
+        else:
+            auth_str = "Trusted_Connection=yes;"
+            
         conn = pyodbc.connect(
             f"DRIVER={{ODBC Driver 18 for SQL Server}};"
             f"SERVER={os.environ.get('SQL_SERVER')};"
             f"DATABASE={os.environ.get('SQL_DATABASE')};"
-            f"UID={os.environ.get('SQL_USER')};"
-            f"PWD={os.environ.get('SQL_PASSWORD')};"
+            f"{auth_str}"
             "TrustServerCertificate=yes;",
             timeout=5,
         )
