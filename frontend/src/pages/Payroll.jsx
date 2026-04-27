@@ -99,14 +99,24 @@ export default function Payroll() {
         <div className="col-lg-3">
           <div className="stat-card">
             <div className="stat-card-label">Total Distribution</div>
-            <div className="stat-card-value text-primary">${summary.TotalPayroll?.toLocaleString() || 0}</div>
+            <div
+              className="stat-card-value text-primary"
+              style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', wordBreak: 'break-all', lineHeight: 1.2 }}
+            >
+              ${summary.TotalPayroll ? Number(summary.TotalPayroll).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}
+            </div>
             <div className="small text-muted mt-1"><i className="bi bi-arrow-up text-success me-1"></i>+2.5% from last month</div>
           </div>
         </div>
         <div className="col-lg-3">
           <div className="stat-card">
             <div className="stat-card-label">Average Salary</div>
-            <div className="stat-card-value text-success">${summary.AvgSalary?.toLocaleString() || 0}</div>
+            <div
+              className="stat-card-value text-success"
+              style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', wordBreak: 'break-all', lineHeight: 1.2 }}
+            >
+              ${summary.AvgSalary ? Number(summary.AvgSalary).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}
+            </div>
             <div className="small text-muted mt-1">Based on {payrollData.length} records</div>
           </div>
         </div>
@@ -177,7 +187,7 @@ export default function Payroll() {
                   <tr key={i}>
                     <td className="ps-4">
                       <div className="fw-bold text-dark">{p.FullName}</div>
-                      <div className="small text-muted">{p.MonthYear}</div>
+                      <div className="small text-muted">{p.MonthYear} {p.DepartmentName ? `• ${p.DepartmentName}` : ''}</div>
                     </td>
                     <td><span className="fw-600 text-dark">${p.BaseSalary?.toLocaleString()}</span></td>
                     <td><span className="text-success fw-600">+$ {p.Bonus?.toLocaleString()}</span></td>

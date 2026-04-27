@@ -3,15 +3,10 @@ import { Link } from 'react-router-dom';
 import { API_BASE, fetchAuth } from '../api';
 import { getCurrentUser } from '../utils/auth';
 import AddEmployeeModal from '../components/AddEmployeeModal';
-
+import { getStatusPresentation } from '../utils/status';
 function StatusBadge({ status }) {
-  const map = {
-    'Active': 'badge-active',
-    'Inactive': 'badge-inactive',
-    'On Leave': 'badge-leave',
-    'Probation': 'badge-probation',
-  };
-  return <span className={`badge ${map[status] || 'badge-inactive'}`}>{status || 'Unknown'}</span>;
+  const presentation = getStatusPresentation(status);
+  return <span className={`badge ${presentation.className}`}>{presentation.label}</span>;
 }
 
 export default function Employees() {
@@ -65,7 +60,7 @@ export default function Employees() {
       e.EmployeeID?.toString().includes(term) ||
       e.Department?.toLowerCase().includes(term);
     const matchDept = !filterDept || e.Department === filterDept;
-    const matchStatus = !filterStatus || e.Status === filterStatus;
+    const matchStatus = !filterStatus || getStatusPresentation(e.Status).label === filterStatus;
     return matchSearch && matchDept && matchStatus;
   });
 
@@ -169,7 +164,7 @@ export default function Employees() {
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">Active</div>
-                <div className="stat-card-value text-success">{employees.filter(e => e.Status === 'Active').length}</div>
+                <div className="stat-card-value text-success">{employees.filter(e => getStatusPresentation(e.Status).label === 'Active').length}</div>
               </div>
               <div className="stat-card-icon bg-success-light text-success">
                 <i className="bi bi-person-check-fill"></i>
@@ -182,7 +177,7 @@ export default function Employees() {
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">On Leave</div>
-                <div className="stat-card-value text-warning">{employees.filter(e => e.Status === 'On Leave').length}</div>
+                <div className="stat-card-value text-warning">{employees.filter(e => getStatusPresentation(e.Status).label === 'On Leave').length}</div>
               </div>
               <div className="stat-card-icon bg-warning-light text-warning">
                 <i className="bi bi-person-dash-fill"></i>

@@ -13,9 +13,18 @@ export default function Header() {
   useEffect(() => {
     fetchAuth(`${API_BASE}/alerts`)
       .then(r => r.json())
-      .then(data => setAlerts(Array.isArray(data) ? data.slice(0, 5) : []))
+      .then(data => {
+        let loadedAlerts = Array.isArray(data) ? data : [];
+        const role = user.role?.toLowerCase() || 'employee';
+        if (role === 'hr') {
+          loadedAlerts = loadedAlerts.filter(a => ['Excessive leave', 'Birthday', 'Work anniversary'].includes(a.type));
+        } else if (role === 'payroll') {
+          loadedAlerts = loadedAlerts.filter(a => a.type === 'Salary anomaly');
+        }
+        setAlerts(loadedAlerts.slice(0, 5));
+      })
       .catch(() => {});
-  }, []);
+  }, [user.role]);
 
   useEffect(() => {
     const handler = (e) => {

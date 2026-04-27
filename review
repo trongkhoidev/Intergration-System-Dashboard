@@ -171,8 +171,8 @@ def get_performance():
 | Vai trò | Quyền hạn |
 |---------|-----------|
 | **Admin** | Quản lý tài khoản user, phân quyền, cấu hình hệ thống. có tất cả các quyền |
-| **HR Manager** | CRUD nhân viên, phòng ban, chức vụ. Xem lương (READ-ONLY). Xem báo cáo |
-| **Payroll Manager** | Quản lý lương, chấm công. Xem nhân sự (READ-ONLY) |
+| **HR Manager** | CRUD nhân viên, phòng ban, chức vụ. Xem báo cáo(Hr report, attendance report) |
+| **Payroll Manager** | Quản lý lương, chấm công. Xem nhân sự (READ-ONLY). Xem báo cáo(payroll report, dividend report, attendance report) |
 | **Employee** | Chỉ xem hồ sơ cá nhân, lịch sử lương, chấm công của mình |
 
 ### Hiện trạng Frontend (App.js)

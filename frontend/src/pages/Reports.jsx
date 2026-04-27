@@ -2,11 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { API_BASE, fetchAuth } from '../api';
+import { getCurrentUser } from '../utils/auth';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 export default function Reports() {
-  const [activeTab, setActiveTab] = useState('HR');
+  const user = getCurrentUser();
+  const role = user.role?.toLowerCase() || 'employee';
+
+  const ALL_TABS = [
+    { id: 'HR', label: 'HR Report', icon: 'bi-person-badge', roles: ['admin', 'hr'] },
+    { id: 'PAYROLL', label: 'Payroll Report', icon: 'bi-cash-coin', roles: ['admin', 'payroll'] },
+    { id: 'ATTENDANCE', label: 'Attendance Report', icon: 'bi-calendar-check', roles: ['admin', 'hr', 'payroll'] },
+    { id: 'DIVIDEND', label: 'Dividend Report', icon: 'bi-wallet2', roles: ['admin', 'payroll'] }
+  ];
+
+  const allowedTabs = ALL_TABS.filter(t => t.roles.includes(role));
+  const [activeTab, setActiveTab] = useState(allowedTabs.length > 0 ? allowedTabs[0].id : 'HR');
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
   const [selectedDept, setSelectedDept] = useState('');
@@ -15,13 +27,6 @@ export default function Reports() {
   const [hrData, setHrData] = useState({ labels: [], data: [] });
   const [payrollData, setPayrollData] = useState({ labels: [], data: [] });
   const [trendData, setTrendData] = useState({ labels: [], data: [] });
-
-  const tabs = [
-    { id: 'HR', label: 'HR Report', icon: 'bi-person-badge' },
-    { id: 'PAYROLL', label: 'Payroll Report', icon: 'bi-cash-coin' },
-    { id: 'ATTENDANCE', label: 'Attendance Report', icon: 'bi-calendar-check' },
-    { id: 'DIVIDEND', label: 'Dividend Report', icon: 'bi-wallet2' }
-  ];
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -114,7 +119,7 @@ export default function Reports() {
       {/* Tabs */}
       <div className="card-custom p-1 mb-4 bg-light rounded-4 d-inline-flex border shadow-sm">
         <ul className="nav nav-pills gap-1">
-          {tabs.map(tab => (
+          {allowedTabs.map(tab => (
             <li key={tab.id} className="nav-item">
               <button 
                 className={`nav-link rounded-4 px-4 py-2 fw-bold small d-flex align-items-center gap-2 ${activeTab === tab.id ? 'bg-primary text-white shadow' : 'text-muted'}`}

@@ -170,22 +170,15 @@ export default function AddEmployeeModal({ isOpen, onClose, onSave }) {
               </div>
               <div className="col-md-6">
                 <label className="form-label">Initial Status</label>
-                <div className="d-flex gap-4 mt-2">
-                  <div className="form-check">
-                    <input 
-                      className="form-check-input" type="radio" name="status" id="statusActive" value="Active"
-                      checked={formData.Status === 'Active'} onChange={e => setFormData({...formData, Status: e.target.value})}
-                    />
-                    <label className="form-check-label" htmlFor="statusActive">Active</label>
-                  </div>
-                  <div className="form-check">
-                    <input 
-                      className="form-check-input" type="radio" name="status" id="statusOnLeave" value="On Leave"
-                      checked={formData.Status === 'On Leave'} onChange={e => setFormData({...formData, Status: e.target.value})}
-                    />
-                    <label className="form-check-label" htmlFor="statusOnLeave">On Leave</label>
-                  </div>
-                </div>
+                <select 
+                  className="form-select" required
+                  value={formData.Status} onChange={e => setFormData({...formData, Status: e.target.value})}
+                >
+                  <option value="Active">Active</option>
+                  <option value="On Leave">On Leave</option>
+                  <option value="Probation">Probation</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
             </div>
           </div>

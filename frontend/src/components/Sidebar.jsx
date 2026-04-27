@@ -29,7 +29,6 @@ const NAV_ITEMS = {
       items: [
         { path: '/', label: 'Dashboard', icon: 'bi-grid-fill' },
         { path: '/employees', label: 'Employees', icon: 'bi-people-fill' },
-        { path: '/payroll', label: 'Payroll', icon: 'bi-cash-coin' },
         { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill' },
         { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill' },
         { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill' },

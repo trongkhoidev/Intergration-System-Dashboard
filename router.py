@@ -95,21 +95,32 @@ def get_payroll():
         my = get_mysql_connection()
         cur = my.cursor(dictionary=True)
         month = request.args.get('month')
-        
+        dept = request.args.get('dept')
+
         query = """
-            SELECT DATE_FORMAT(s.SalaryMonth, '%M %Y') AS MonthYear, e.FullName, s.BaseSalary, s.Bonus, s.Deductions, s.NetSalary AS TotalSalary
+            SELECT s.SalaryID, DATE_FORMAT(s.SalaryMonth, '%M %Y') AS MonthYear,
+                   e.FullName, dp.DepartmentName,
+                   s.BaseSalary, s.Bonus, s.Deductions, s.NetSalary AS TotalSalary
             FROM salaries s
             JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll dp ON e.DepartmentID = dp.DepartmentID
         """
-        
+
+        conditions = []
+        params = []
+
         if month and month != 'All Months':
-            query += " WHERE DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s"
-            query += " ORDER BY s.SalaryMonth DESC"
-            cur.execute(query, (month,))
-        else:
-            query += " ORDER BY s.SalaryMonth DESC"
-            cur.execute(query)
-            
+            conditions.append("DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s")
+            params.append(month)
+        if dept:
+            conditions.append("dp.DepartmentName = %s")
+            params.append(dept)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY s.SalaryMonth DESC"
+
+        cur.execute(query, params)
         return jsonify(cur.fetchall())
     except Exception as e:
         print(f"Error in get_payroll: {e}")
@@ -165,28 +176,42 @@ def get_payroll_summary():
         my = get_mysql_connection()
         cur = my.cursor(dictionary=True)
         month = request.args.get('month')
-        
+        dept = request.args.get('dept')
+
         # Summary
-        base_query = "SELECT SUM(NetSalary) as TotalPayroll, AVG(NetSalary) as AvgSalary FROM salaries"
-        if month and month != 'All Months':
-            cur.execute(base_query + " WHERE DATE_FORMAT(SalaryMonth, '%M %Y') = %s", (month,))
-        else:
-            cur.execute(base_query)
-        summary = cur.fetchone()
-        
-        # Breakdown by department
-        breakdown_query = """
-            SELECT DepartmentID, SUM(NetSalary) as Amount 
-            FROM salaries s JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID 
+        conditions = []
+        params = []
+        base_query = """
+            SELECT SUM(s.NetSalary) as TotalPayroll, AVG(s.NetSalary) as AvgSalary
+            FROM salaries s
+            JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll dp ON e.DepartmentID = dp.DepartmentID
         """
         if month and month != 'All Months':
-            breakdown_query += " WHERE DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s"
-            breakdown_query += " GROUP BY DepartmentID"
-            cur.execute(breakdown_query, (month,))
-        else:
-            breakdown_query += " GROUP BY DepartmentID"
-            cur.execute(breakdown_query)
-            
+            conditions.append("DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s")
+            params.append(month)
+        if dept:
+            conditions.append("dp.DepartmentName = %s")
+            params.append(dept)
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+        cur.execute(base_query, params)
+        summary = cur.fetchone()
+
+        # Breakdown by department
+        breakdown_conditions = list(conditions)
+        breakdown_params = list(params)
+        breakdown_query = """
+            SELECT dp.DepartmentID, dp.DepartmentName, SUM(s.NetSalary) as Amount
+            FROM salaries s
+            JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll dp ON e.DepartmentID = dp.DepartmentID
+        """
+        if breakdown_conditions:
+            breakdown_query += " WHERE " + " AND ".join(breakdown_conditions)
+        breakdown_query += " GROUP BY dp.DepartmentID, dp.DepartmentName"
+        cur.execute(breakdown_query, breakdown_params)
+
         summary['Breakdown'] = cur.fetchall()
         return jsonify(summary)
     except Exception as e:

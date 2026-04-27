@@ -4,12 +4,13 @@ import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { API_BASE, fetchAuth } from '../api';
 import { Link } from 'react-router-dom';
 import { getCurrentUser } from '../utils/auth';
+import { getStatusPresentation } from '../utils/status';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 function StatusBadge({ status }) {
-  const map = { 'Active': 'badge-active', 'Inactive': 'badge-inactive', 'On Leave': 'badge-leave', 'Probation': 'badge-probation' };
-  return <span className={`badge ${map[status] || 'badge-inactive'}`}>{status || 'Unknown'}</span>;
+  const presentation = getStatusPresentation(status);
+  return <span className={`badge ${presentation.className}`}>{presentation.label}</span>;
 }
 
 function StatCard({ title, value, icon, gradient, sub, subIcon }) {
@@ -85,9 +86,15 @@ export default function Dashboard() {
       });
 
       // Process Status Distribution (Bar)
+      const normalizedStatusCount = {};
+      Object.entries(statusRaw).forEach(([rawStatus, count]) => {
+        const label = getStatusPresentation(rawStatus).label;
+        normalizedStatusCount[label] = (normalizedStatusCount[label] || 0) + count;
+      });
+
       setStatusData({
-        labels: Object.keys(statusRaw),
-        data: Object.values(statusRaw)
+        labels: Object.keys(normalizedStatusCount),
+        data: Object.values(normalizedStatusCount)
       });
 
       setRecentEmployees((emps || []).slice(0, 8));

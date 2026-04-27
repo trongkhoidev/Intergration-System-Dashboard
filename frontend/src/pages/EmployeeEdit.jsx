@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { API_BASE, fetchAuth } from "../api";
+import { getStatusPresentation } from "../utils/status";
 
 export default function EmployeeEdit() {
   const nav = useNavigate();
@@ -69,7 +70,7 @@ export default function EmployeeEdit() {
           HireDate: convertDate(data.HireDate),
           DepartmentID: data.DepartmentID ?? "",
           PositionID: data.PositionID ?? "",
-          Status: data.Status || "Active",
+          Status: data.Status ? getStatusPresentation(data.Status).label : "Active",
         });
         setDataLoading(false);
       })
@@ -210,8 +211,9 @@ export default function EmployeeEdit() {
                 <label className="form-label stat-label small text-uppercase">System Status</label>
                 <select id="Status" className="form-select form-control-custom" value={form.Status} onChange={handleChange}>
                   <option value="Active">Operational / Active</option>
-                  <option value="Inactive">Legacy / Inactive</option>
                   <option value="On Leave">Temporary Absence</option>
+                  <option value="Probation">Trial / Probation</option>
+                  <option value="Inactive">Legacy / Inactive</option>
                 </select>
               </div>
 

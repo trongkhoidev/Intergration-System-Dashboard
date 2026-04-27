@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { API_BASE, fetchAuth } from '../api';
 import { getCurrentUser } from '../utils/auth';
+import { getStatusPresentation } from '../utils/status';
 
 const ROLE_LABELS = {
   Admin: 'System Administrator',
@@ -174,8 +175,8 @@ export default function Profile() {
                 <div className="card bg-white border h-100">
                   <div className="d-flex justify-content-between align-items-center mb-4">
                     <h5 className="fw-bold m-0 text-primary">Job Information</h5>
-                    <span className={`badge ${profileData?.Status === 'Active' ? 'badge-active' : 'badge-inactive'}`}>
-                      {profileData?.Status || 'Active'}
+                    <span className={`badge ${getStatusPresentation(profileData?.Status).className}`}>
+                      {getStatusPresentation(profileData?.Status).label}
                     </span>
                   </div>
                   
