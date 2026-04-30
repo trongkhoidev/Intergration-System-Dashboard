@@ -1,22 +1,23 @@
-"""
-Flask Backend - Data Integration API
-Chạy tại http://localhost:5000
-React Frontend gọi API từ đây.
-"""
 from flask import Flask
 from flask_cors import CORS
+import os
 
 from router import router
 
 app = Flask(__name__)
-CORS(app)  # Cho phép React (localhost:3000) gọi API
+CORS(app)
+
 app.register_blueprint(router)
 
 
 @app.route("/")
 def index():
-    return {"msg": "Data Integration API - chạy OK", "docs": "/api/employees"}
+    return {
+        "msg": "Data Integration API - running OK",
+        "docs": "/api/employees"
+    }
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    port = int(os.environ.get("PORT", 5000))  # 🔥 QUAN TRỌNG
+    app.run(host="0.0.0.0", port=port)       # 🔥 QUAN TRỌNG

@@ -26,8 +26,8 @@ export default function Alerts() {
     loadAlerts();
   }, []);
 
-  const handleAlertAction = (alertId) => {
-    setAlerts(prev => prev.filter(a => (a.id || a.message) !== alertId));
+  const handleAlertAction = (alertIndex) => {
+    setAlerts(prev => prev.filter((_, i) => i !== alertIndex));
     setSelectedAlert(null);
   };
 
@@ -94,8 +94,8 @@ export default function Alerts() {
                     filteredAlerts.map((a, i) => (
                       <tr 
                         key={i} 
-                        className={`hover-row ${selectedAlert === a ? 'bg-primary-light' : ''}`} 
-                        onClick={() => setSelectedAlert(a)}
+                        className={`hover-row ${selectedAlert?.index === i ? 'bg-primary-light' : ''}`} 
+                        onClick={() => setSelectedAlert({ ...a, index: i })}
                         style={{ cursor: 'pointer' }}
                       >
                         <td className="ps-4">
@@ -126,7 +126,7 @@ export default function Alerts() {
             <AlertDetailPanel 
               alert={selectedAlert} 
               onClose={() => setSelectedAlert(null)} 
-              onAction={handleAlertAction} 
+              onAction={() => handleAlertAction(selectedAlert?.index)} 
             />
           </div>
         )}

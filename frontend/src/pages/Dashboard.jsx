@@ -4,6 +4,7 @@ import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { API_BASE, fetchAuth } from '../api';
 import { Link } from 'react-router-dom';
 import { getCurrentUser } from '../utils/auth';
+import ExportModal from '../components/ExportModal';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -64,6 +65,7 @@ export default function Dashboard() {
   const [statusData, setStatusData] = useState({ labels: [], data: [] });
   const [recentEmployees, setRecentEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -154,7 +156,9 @@ export default function Dashboard() {
         </div>
         <div className="d-flex gap-2">
           <button className="btn btn-outline bg-white"><i className="bi bi-calendar3 me-2"></i> Last 30 Days</button>
-          <button className="btn btn-primary shadow-sm"><i className="bi bi-download me-2"></i> Export Report</button>
+          <button className="btn btn-primary shadow-sm" onClick={() => setIsExportModalOpen(true)}>
+            <i className="bi bi-download me-2"></i> Export Report
+          </button>
         </div>
       </div>
 
@@ -272,6 +276,20 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      
+      <ExportModal 
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        title="Executive Overview"
+        columns={[
+          { header: 'Employee', key: 'FullName' },
+          { header: 'Department', key: 'Department' },
+          { header: 'Role', key: 'Position' },
+          { header: 'Status', key: 'Status' }
+        ]}
+        data={recentEmployees}
+        filename="Executive_Overview"
+      />
     </div>
   );
 }

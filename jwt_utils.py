@@ -27,13 +27,14 @@ def normalize_role(raw_role):
     return "Employee"
 
 
-def create_token(user_id, username, email, role):
+def create_token(user_id, username, email, role, employee_id=None):
     """Generate a JWT token with user claims."""
     payload = {
         "user_id": user_id,
         "username": username,
         "email": email,
         "role": normalize_role(role),
+        "employee_id": employee_id,
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
     }

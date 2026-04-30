@@ -90,7 +90,9 @@ export default function Payroll() {
           <p className="page-subtitle">Oversee salary distributions, bonuses, and deductions</p>
         </div>
         <div className="d-flex gap-2">
-          <button className="btn btn-outline"><i className="bi bi-download me-2"></i> Export PDF</button>
+          <button className="btn btn-outline" onClick={() => setIsExportModalOpen(true)}>
+            <i className="bi bi-download me-2"></i> Export PDF
+          </button>
           <button className="btn btn-primary shadow-sm"><i className="bi bi-plus-circle me-2"></i> Generate Payroll</button>
         </div>
       </div>
