@@ -87,7 +87,7 @@ export default function MyPayroll() {
                 <th>Base Salary</th>
                 <th>Bonus</th>
                 <th>Deductions</th>
-                <th className="pe-4">Net Salary</th>
+                <th className="pe-4 text-end">Net Salary</th>
               </tr>
             </thead>
             <tbody>
@@ -108,7 +108,7 @@ export default function MyPayroll() {
                     <td>${(r.BaseSalary || 0).toLocaleString()}</td>
                     <td><span className="text-success fw-bold">+${(r.Bonus || 0).toLocaleString()}</span></td>
                     <td><span className="text-danger fw-bold">-${(r.Deductions || 0).toLocaleString()}</span></td>
-                    <td className="pe-4 fw-bold text-primary fs-6">${(r.NetSalary || 0).toLocaleString()}</td>
+                    <td className="pe-4 fw-bold text-primary fs-6 text-end">${(r.NetSalary || 0).toLocaleString()}</td>
                   </tr>
                 ))
               )}

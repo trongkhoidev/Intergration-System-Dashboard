@@ -75,7 +75,7 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-base);
-  font-size: 14px;
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -406,11 +406,12 @@ body {
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 6px 14px;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
 }
 
 .badge-active, .badge-success {
@@ -776,6 +777,42 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.toast-premium {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-left: 4px solid;
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 320px;
+}
+
+.toast-premium i {
+  font-size: 1.5rem;
+}
+
+.toast-premium.alert-success {
+  border-left-color: var(--accent-green);
+}
+.toast-premium.alert-success i {
+  color: var(--accent-green);
+}
+
+.toast-premium.alert-danger {
+  border-left-color: var(--accent-red);
+}
+.toast-premium.alert-danger i {
+  color: var(--accent-red);
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 /* ===== SKELETON ===== */

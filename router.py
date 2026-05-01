@@ -6,8 +6,17 @@
 from flask import Blueprint, jsonify, request
 from config import get_sqlserver_connection, get_mysql_connection, get_auth_connection
 from werkzeug.security import generate_password_hash, check_password_hash
-from jwt_utils import create_token, require_auth, normalize_role
-from datetime import datetime, timezone
+from jwt_utils import create_token, require_auth, normalize_role, decode_token
+from datetime import datetime, date, timezone
+import os
+import random
+import smtplib
+import uuid
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Hằng số nghiệp vụ
+WORKING_DAYS_PER_MONTH = 22
 
 router = Blueprint("router", __name__)
 
@@ -22,51 +31,76 @@ def log_audit(action, username="system", details=""):
             "INSERT INTO AuditLogs (Username, Action, Details, Timestamp) VALUES (?, ?, ?, GETDATE())",
             (username, action, details),
         )
+        cur.close()
+        auth.close()
     except Exception as e:
         print(f"Audit log error: {e}")
 
 
 # ============================================================
 # AUTH API: LOGIN – Returns JWT Token (FR13)
+# Đăng nhập bằng Email (ưu tiên) hoặc Username
 # ============================================================
 @router.route("/api/login", methods=["POST"])
 def login():
     data = request.json
-    username = data.get('username', '').strip()
+    email_or_username = data.get('email', data.get('username', '')).strip()
     password = data.get('password', '')
 
-    if not username or not password:
-        return jsonify({"status": "error", "msg": "Incomplete data"}), 400
+    if not email_or_username or not password:
+        return jsonify({"status": "error", "msg": "Vui lòng nhập email và mật khẩu"}), 400
 
     try:
         auth = get_auth_connection()
         auth.autocommit = True
         cur = auth.cursor()
         cur.execute(
-            "SELECT UserID, Username, Email, PasswordHash, Role, FailedAttempts, LockedUntil FROM SystemUsers WHERE Username = ? OR Email = ?",
-            (username, username),
+            "SELECT UserID, Username, Email, PasswordHash, Role, FailedAttempts, LockedUntil, EmployeeID FROM SystemUsers WHERE Email = ? OR Username = ?",
+            (email_or_username, email_or_username),
         )
         row = cur.fetchone()
 
         if not row:
-            return jsonify({"status": "error", "msg": "Invalid credentials"}), 401
+            return jsonify({"status": "error", "msg": "Email hoặc mật khẩu không đúng"}), 401
 
-        user_id, db_username, email, pw_hash, role, failed, locked_until = row
+        user_id, db_username, email, pw_hash, role, failed, locked_until, employee_id = row
 
         # BR-21: Check account lock
         if locked_until and locked_until > datetime.now():
-            return jsonify({"status": "error", "msg": "Account locked. Try again later."}), 423
+            return jsonify({"status": "error", "msg": "Tài khoản đã bị khóa. Vui lòng thử lại sau."}), 423
 
         if check_password_hash(pw_hash, password):
             # Reset failed attempts on success
             cur.execute("UPDATE SystemUsers SET FailedAttempts = 0, LockedUntil = NULL WHERE UserID = ?", (user_id,))
             normalized_role = normalize_role(role)
-            token = create_token(user_id, db_username, email or "", normalized_role)
-            log_audit("LOGIN_SUCCESS", db_username, "User logged in")
+            token = create_token(user_id, db_username, email or "", normalized_role, employee_id)
+
+            # Lấy FullName từ bảng Employees nếu có EmployeeID
+            full_name = db_username  # fallback
+            if employee_id:
+                try:
+                    sql = get_sqlserver_connection()
+                    scur = sql.cursor()
+                    scur.execute("SELECT FullName FROM Employees WHERE EmployeeID = ?", (employee_id,))
+                    emp_row = scur.fetchone()
+                    if emp_row:
+                        full_name = emp_row[0]
+                    sql.close()
+                except Exception:
+                    pass
+
+            log_audit("LOGIN_SUCCESS", db_username, f"User logged in via {'email' if '@' in email_or_username else 'username'}")
             return jsonify({
                 "status": "success",
                 "token": token,
-                "user": {"user_id": user_id, "username": db_username, "email": email or "", "role": normalized_role},
+                "user": {
+                    "user_id": user_id,
+                    "username": db_username,
+                    "email": email or "",
+                    "role": normalized_role,
+                    "employee_id": employee_id,
+                    "full_name": full_name,
+                },
             })
         else:
             # Increment failed attempts
@@ -76,14 +110,14 @@ def login():
                 lock_sql = ", LockedUntil = DATEADD(MINUTE, 15, GETDATE())"
             cur.execute(f"UPDATE SystemUsers SET FailedAttempts = ?{lock_sql} WHERE UserID = ?", (new_failed, user_id))
             log_audit("LOGIN_FAILED", db_username, f"Attempt {new_failed}")
-            msg = "Invalid credentials"
+            msg = "Email hoặc mật khẩu không đúng"
             if new_failed >= 3:
-                msg = "Account locked for 15 minutes after 3 failed attempts"
+                msg = "Tài khoản đã bị khóa 15 phút sau 3 lần đăng nhập sai"
             return jsonify({"status": "error", "msg": msg}), 401
 
     except Exception as e:
         print(f"Error in login: {e}")
-        return jsonify({"status": "error", "msg": "Authentication server error"}), 500
+        return jsonify({"status": "error", "msg": "Lỗi máy chủ xác thực"}), 500
 
 # ============================================================
 # NEW API: PAYROLL DATA
@@ -294,7 +328,7 @@ def get_dashboard_stats():
             mcur.execute(attendance_query)
             
         attendance_count = mcur.fetchone()['TotalDays'] or 0
-        possible_days = total_employees * 22 if total_employees > 0 else 1
+        possible_days = total_employees * WORKING_DAYS_PER_MONTH if total_employees > 0 else 1
         attendance_rate = min(100, round((attendance_count / possible_days) * 100, 1))
 
         return jsonify({
@@ -313,98 +347,112 @@ def get_dashboard_stats():
 @require_auth()
 def get_alerts():
     alerts = []
+    today = date.today()
+    current_month = today.month
+    current_year = today.year
+    INACTIVE_STATUSES = ('Inactive',)
+
     try:
         sql = get_sqlserver_connection()
         cur = sql.cursor()
 
-        # Try to get manual alerts if the table exists
-        try:
-            cur.execute("SELECT AlertType, Message, Severity, CreatedAt FROM Alerts ORDER BY CreatedAt DESC")
-            for r in cur.fetchall():
-                alerts.append({"type": r[0], "message": r[1], "severity": r[2], "date": str(r[3]), "employee": "Manual Alert"})
-        except Exception:
-            pass
-
-        # 1. Birthday Alerts
-        cur.execute("SELECT EmployeeID, FullName FROM Employees WHERE MONTH(DateOfBirth) = MONTH(GETDATE()) AND Status = 'Active'")
-        for r in cur.fetchall():
-            alerts.append({"type": "Birthday", "message": f"It's {r[1]}'s birthday month!", "severity": "info", "date": "This month", "employee": r[1], "employeeId": r[0]})
-
-        # 2. Work Anniversary Alerts – FR10: 1, 3, 5 year milestones (BR-09: 12,36,60 months)
+        # FR10-A: Birthday Alerts (SQL Server - Employees.DateOfBirth)
         cur.execute("""
-            SELECT EmployeeID, FullName, HireDate, DATEDIFF(MONTH, HireDate, GETDATE()) AS Months
-            FROM Employees WHERE Status = 'Active'
-            AND DATEDIFF(MONTH, HireDate, GETDATE()) IN (12, 36, 60)
+            SELECT EmployeeID, FullName, DateOfBirth, Status
+            FROM Employees
+            WHERE MONTH(DateOfBirth) = ?
+        """, (current_month,))
+        for r in cur.fetchall():
+            if r[3] in INACTIVE_STATUSES:
+                continue
+            dob_str = str(r[2])[:10] if r[2] else 'N/A'
+            alerts.append({
+                "type": "Birthday",
+                "message": f"{r[1]} has a birthday this month (DOB: {dob_str})",
+                "severity": "info",
+                "date": f"Month {current_month}/{current_year}",
+                "employee": r[1],
+                "employeeId": r[0]
+            })
+
+        # FR10-B: Work Anniversary Alerts (1, 3, 5 years - computed in Python)
+        cur.execute("""
+            SELECT EmployeeID, FullName, HireDate, Status
+            FROM Employees
+            WHERE HireDate IS NOT NULL
         """)
         for r in cur.fetchall():
-            years = r[3] // 12
-            alerts.append({"type": "Work anniversary", "message": f"{r[1]} celebrates {years} year(s) of service", "severity": "info", "date": str(r[2]), "employee": r[1], "employeeId": r[0]})
+            if r[3] in INACTIVE_STATUSES or not r[2]:
+                continue
+            hire_date = r[2]
+            years = current_year - hire_date.year
+            if hire_date.month == current_month and years in (1, 3, 5):
+                alerts.append({
+                    "type": "Work anniversary",
+                    "message": f"{r[1]} celebrates {years} year(s) of service this month (hired: {hire_date.strftime('%d/%m/%Y')})",
+                    "severity": "info",
+                    "date": f"{years} year(s) since {hire_date.strftime('%d/%m/%Y')}",
+                    "employee": r[1],
+                    "employeeId": r[0]
+                })
 
-        # 3. Excessive Leave – FR11: >12 days/year (BR-19)
+        # FR11: Excessive Leave Alerts (MySQL - attendance.LeaveDays)
+        # Uses all available attendance records (not year-filtered due to limited data)
         my = get_mysql_connection()
         mcur = my.cursor(dictionary=True)
         mcur.execute("""
-            SELECT e.EmployeeID, e.FullName, SUM(a.LeaveDays) AS TotalLeave
-            FROM attendance a JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
-            WHERE e.Status = 'Đang làm việc' OR e.Status = 'Active'
-            GROUP BY e.EmployeeID, e.FullName HAVING SUM(a.LeaveDays) > 12
+            SELECT ep.EmployeeID, ep.FullName, SUM(a.LeaveDays) AS TotalLeave
+            FROM attendance a
+            JOIN employees_payroll ep ON a.EmployeeID = ep.EmployeeID
+            GROUP BY ep.EmployeeID, ep.FullName
+            HAVING SUM(a.LeaveDays) > 3
         """)
         for r in mcur.fetchall():
-            alerts.append({"type": "Excessive leave", "message": f"{r['FullName']} exceeded {r['TotalLeave']} annual leave days (limit: 12)", "severity": "warning", "date": "Current year", "employee": r['FullName'], "employeeId": r['EmployeeID']})
+            total = int(r['TotalLeave'])
+            severity = "critical" if total > 8 else "warning"
+            alerts.append({
+                "type": "Excessive leave",
+                "message": f"{r['FullName']} has {total} accumulated leave day(s) on record (BR-19)",
+                "severity": severity,
+                "date": "All records",
+                "employee": r['FullName'],
+                "employeeId": r['EmployeeID']
+            })
 
-        # 4. Salary Anomaly – FR12: >20% change between periods (BR-11)
+        # FR12: Salary Anomaly Alerts (MySQL - salaries, max vs min SalaryID per employee)
         mcur.execute("""
-            SELECT e.EmployeeID, e.FullName, s1.NetSalary AS Current, s2.NetSalary AS Previous,
-                   ROUND(ABS(s1.NetSalary - s2.NetSalary) / s2.NetSalary * 100, 1) AS PctChange
-            FROM salaries s1
-            JOIN salaries s2 ON s1.EmployeeID = s2.EmployeeID AND s1.SalaryID > s2.SalaryID
-            JOIN employees_payroll e ON s1.EmployeeID = e.EmployeeID
-            WHERE ABS(s1.NetSalary - s2.NetSalary) / s2.NetSalary > 0.20
-            AND s2.NetSalary > 0
-            ORDER BY s1.SalaryID DESC LIMIT 10
+            SELECT
+                ep.EmployeeID, ep.FullName,
+                s_new.NetSalary AS NewSalary,
+                s_old.NetSalary AS OldSalary,
+                ROUND(ABS(s_new.NetSalary - s_old.NetSalary) / s_old.NetSalary * 100, 1) AS PctChange
+            FROM employees_payroll ep
+            JOIN salaries s_new ON s_new.SalaryID = (
+                SELECT MAX(SalaryID) FROM salaries WHERE EmployeeID = ep.EmployeeID
+            )
+            JOIN salaries s_old ON s_old.SalaryID = (
+                SELECT MIN(SalaryID) FROM salaries WHERE EmployeeID = ep.EmployeeID
+            )
+            WHERE s_old.NetSalary > 0
+            AND s_new.SalaryID != s_old.SalaryID
+            AND ABS(s_new.NetSalary - s_old.NetSalary) / s_old.NetSalary > 0.20
         """)
         for r in mcur.fetchall():
-            alerts.append({"type": "Salary anomaly", "message": f"Unusual salary change for {r['FullName']}: {r['PctChange']}% difference", "severity": "critical", "date": "Recent", "employee": r['FullName'], "employeeId": r['EmployeeID']})
+            pct = float(r['PctChange'])
+            direction = "increase" if r['NewSalary'] > r['OldSalary'] else "decrease"
+            alerts.append({
+                "type": "Salary anomaly",
+                "message": f"{r['FullName']} had a {pct}% salary {direction} between pay records (threshold: 20%, BR-11)",
+                "severity": "critical",
+                "date": "Across pay periods",
+                "employee": r['FullName'],
+                "employeeId": r['EmployeeID']
+            })
 
         return jsonify(alerts)
     except Exception as e:
         print(f"Error in get_alerts: {e}")
         return jsonify(alerts)
-
-@router.route("/api/alerts", methods=["POST"])
-@require_auth(["Admin", "HR"])
-def create_alert():
-    data = request.json
-    try:
-        sql = get_sqlserver_connection()
-        sql.autocommit = True
-        cur = sql.cursor()
-        
-        # Create table if not exists
-        try:
-            cur.execute("""
-                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Alerts')
-                CREATE TABLE Alerts (
-                    AlertID INT PRIMARY KEY IDENTITY(1,1),
-                    AlertType NVARCHAR(50),
-                    Message NVARCHAR(255),
-                    Severity NVARCHAR(20),
-                    CreatedAt DATETIME DEFAULT GETDATE()
-                )
-            """)
-        except Exception:
-            pass
-
-        cur.execute("INSERT INTO Alerts (AlertType, Message, Severity) VALUES (?, ?, ?)", 
-                   (data.get("type", "Manual"), data.get("message"), data.get("severity", "info")))
-        
-        username = getattr(request, 'current_user', {}).get('username', 'system')
-        log_audit("ALERT_CREATED", username, f"Created manual alert: {data.get('message')}")
-        
-        return jsonify({"status": "success"})
-    except Exception as e:
-        print(f"Error creating alert: {e}")
-        return jsonify({"status": "error", "msg": str(e)}), 500
 
 # ============================================================
 # NEW API: CHANGE PASSWORD (FUNCTIONAL)
@@ -414,98 +462,272 @@ def create_alert():
 def change_password():
     data = request.json
     username = data.get('username')
+    current_password = data.get('current_password', '')
     new_password = data.get('new_password')
     
-    if not username or not new_password:
-        return jsonify({"status": "error", "msg": "Incomplete data"}), 400
+    if not username or not new_password or not current_password:
+        return jsonify({"status": "error", "msg": "Thiếu thông tin: cần username, current_password, new_password"}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"status": "error", "msg": "Mật khẩu mới phải có ít nhất 6 ký tự"}), 400
 
     try:
         auth = get_auth_connection()
         auth.autocommit = True
         cur = auth.cursor()
+
+        # Xác minh mật khẩu hiện tại trước khi đổi (BR)
+        cur.execute("SELECT PasswordHash FROM SystemUsers WHERE Username = ?", (username,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"status": "error", "msg": "Tài khoản không tồn tại"}), 404
+        if not check_password_hash(row[0], current_password):
+            return jsonify({"status": "error", "msg": "Mật khẩu hiện tại không đúng"}), 401
+
         hashed_password = generate_password_hash(new_password)
         cur.execute("UPDATE SystemUsers SET PasswordHash = ? WHERE Username = ?", (hashed_password, username))
-        return jsonify({"status": "success", "msg": "Password updated successfully"})
+        log_audit("PASSWORD_CHANGED", username, "User changed their own password")
+        return jsonify({"status": "success", "msg": "Đổi mật khẩu thành công"})
     except Exception as e:
         print(f"Error in change_password: {e}")
-        return jsonify({"status": "error", "msg": "Failed to update password"}), 500
+        return jsonify({"status": "error", "msg": "Lỗi đổi mật khẩu"}), 500
 
 # ============================================================
-# API: FORGOT PASSWORD (FR)
+# API: FORGOT PASSWORD – OTP 6 số (FR)
 # ============================================================
-import uuid
+
+
+def generate_otp():
+    """Tạo mã OTP ngẫu nhiên 6 chữ số."""
+    return str(random.randint(100000, 999999))
+
+
+def send_otp_email(to_email, otp_code, username):
+    """
+    Gửi mã OTP qua email.
+    Nếu cấu hình SMTP trong .env → gửi email thật.
+    Nếu không → in ra console (mock mode).
+    """
+    mail_server = os.environ.get('MAIL_SERVER', '')
+    mail_user = os.environ.get('MAIL_USERNAME', '')
+    mail_pass = os.environ.get('MAIL_PASSWORD', '')
+    mail_port = int(os.environ.get('MAIL_PORT', '587'))
+
+    if not mail_server or not mail_user or not mail_pass:
+        # Mock mode: In OTP ra console
+        print(f"\n{'='*50}")
+        print(f"  [OTP MOCK] Email: {to_email}")
+        print(f"  [OTP MOCK] Ma OTP: {otp_code}")
+        print(f"  [OTP MOCK] Het han sau 10 phut")
+        print(f"{'='*50}\n")
+        return True
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'[Integration Dashboard] Ma OTP xac nhan: {otp_code}'
+        msg['From'] = mail_user
+        msg['To'] = to_email
+
+        html_body = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 30px; background: #f8f9fa; border-radius: 12px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); width: 56px; height: 56px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-size: 24px;">🔐</span>
+                </div>
+            </div>
+            <h2 style="text-align: center; color: #1f2937; margin-bottom: 8px;">Xac nhan doi mat khau</h2>
+            <p style="text-align: center; color: #6b7280; font-size: 14px;">Xin chao <b>{username}</b>, day la ma OTP cua ban:</p>
+            <div style="background: white; border: 2px dashed #4f46e5; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #4f46e5;">{otp_code}</span>
+            </div>
+            <p style="text-align: center; color: #ef4444; font-size: 13px; font-weight: bold;">⏳ Ma nay se het han sau 10 phut</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+            <p style="text-align: center; color: #9ca3af; font-size: 12px;">Neu ban khong yeu cau doi mat khau, vui long bo qua email nay.</p>
+        </div>
+        """
+        msg.attach(MIMEText(html_body, 'html'))
+
+        with smtplib.SMTP(mail_server, mail_port) as server:
+            server.starttls()
+            server.login(mail_user, mail_pass)
+            server.sendmail(mail_user, to_email, msg.as_string())
+
+        print(f"[EMAIL] OTP sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"[EMAIL ERROR] Failed to send OTP to {to_email}: {e}")
+        return False
+
 
 @router.route("/api/forgot-password", methods=["POST"])
 def forgot_password():
     data = request.json
     email = data.get('email', '').strip()
     if not email:
-        return jsonify({"status": "error", "msg": "Email is required"}), 400
+        return jsonify({"status": "error", "msg": "Vui long nhap email"}), 400
 
     try:
         auth = get_auth_connection()
         auth.autocommit = True
         cur = auth.cursor()
-
-        # Add Reset columns if not exists
-        try:
-            cur.execute("ALTER TABLE SystemUsers ADD ResetToken NVARCHAR(255) NULL")
-            cur.execute("ALTER TABLE SystemUsers ADD ResetTokenExpiry DATETIME NULL")
-        except Exception:
-            pass
 
         cur.execute("SELECT UserID, Username FROM SystemUsers WHERE Email = ?", (email,))
         row = cur.fetchone()
         if not row:
-            # Return success to prevent email enumeration
-            return jsonify({"status": "success", "msg": "If the email exists, a reset link will be sent."})
+            # Tra ve success de tranh lo email (security)
+            return jsonify({"status": "success", "msg": "Neu email ton tai, ma OTP se duoc gui."})
 
         user_id, username = row
-        token = str(uuid.uuid4())
-        
-        cur.execute("UPDATE SystemUsers SET ResetToken = ?, ResetTokenExpiry = DATEADD(MINUTE, 30, GETDATE()) WHERE UserID = ?", (token, user_id))
-        
-        # In a real app, send email here. We simulate it via console log.
-        reset_link = f"http://localhost:3000/reset-password?token={token}"
-        print(f"[EMAIL MOCK] Password reset link for {email}: {reset_link}")
-        log_audit("PASSWORD_RESET_REQUESTED", username, "User requested password reset")
 
-        return jsonify({"status": "success", "msg": f"Development Mode: <a href='/reset-password?token={token}' class='fw-bold text-decoration-underline'>Click Here</a> to reset your password. (Normally sent via email)"})
+        # Tao ma OTP 6 so
+        otp_code = generate_otp()
+
+        # Luu OTP vao DB, het han sau 10 phut
+        cur.execute("""
+            UPDATE SystemUsers 
+            SET OTPCode = ?, OTPExpiry = DATEADD(MINUTE, 10, GETDATE()), OTPAttempts = 0
+            WHERE UserID = ?
+        """, (otp_code, user_id))
+
+        # Gui email (that hoac mock)
+        email_sent = send_otp_email(email, otp_code, username)
+
+        log_audit("OTP_REQUESTED", username, f"OTP requested for password reset")
+
+        if email_sent:
+            return jsonify({
+                "status": "success",
+                "msg": "Ma OTP 6 so da duoc gui den email cua ban. Vui long kiem tra hop thu.",
+                "otp_sent": True
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "msg": "Khong the gui email. Vui long thu lai sau."
+            }), 500
+
     except Exception as e:
         print(f"Error in forgot_password: {e}")
-        return jsonify({"status": "error", "msg": "Failed to process request"}), 500
+        return jsonify({"status": "error", "msg": "Loi xu ly yeu cau"}), 500
 
 
-@router.route("/api/reset-password", methods=["POST"])
-def reset_password():
+@router.route("/api/verify-otp", methods=["POST"])
+def verify_otp():
+    """Xac nhan ma OTP 6 so."""
     data = request.json
-    token = data.get('token')
-    new_password = data.get('new_password')
+    email = data.get('email', '').strip()
+    otp = data.get('otp', '').strip()
 
-    if not token or not new_password:
-        return jsonify({"status": "error", "msg": "Missing token or new password"}), 400
+    if not email or not otp:
+        return jsonify({"status": "error", "msg": "Vui long nhap email va ma OTP"}), 400
 
     try:
         auth = get_auth_connection()
         auth.autocommit = True
         cur = auth.cursor()
-        
-        cur.execute("SELECT UserID, Username FROM SystemUsers WHERE ResetToken = ? AND ResetTokenExpiry > GETDATE()", (token,))
+
+        cur.execute("""
+            SELECT UserID, Username, OTPCode, OTPExpiry, OTPAttempts 
+            FROM SystemUsers WHERE Email = ?
+        """, (email,))
         row = cur.fetchone()
-        
+
         if not row:
-            return jsonify({"status": "error", "msg": "Invalid or expired reset token"}), 400
-            
+            return jsonify({"status": "error", "msg": "Email khong ton tai"}), 404
+
+        user_id, username, stored_otp, otp_expiry, otp_attempts = row
+
+        # Kiem tra so lan nhap sai (toi da 5 lan)
+        if otp_attempts and otp_attempts >= 5:
+            cur.execute("UPDATE SystemUsers SET OTPCode = NULL, OTPExpiry = NULL, OTPAttempts = 0 WHERE UserID = ?", (user_id,))
+            log_audit("OTP_BLOCKED", username, "Too many failed OTP attempts")
+            return jsonify({"status": "error", "msg": "Qua nhieu lan nhap sai. Vui long yeu cau ma OTP moi."}), 429
+
+        # Kiem tra OTP co ton tai khong
+        if not stored_otp or not otp_expiry:
+            return jsonify({"status": "error", "msg": "Khong tim thay ma OTP. Vui long yeu cau ma moi."}), 400
+
+        # Kiem tra OTP het han
+        if otp_expiry < datetime.now():
+            cur.execute("UPDATE SystemUsers SET OTPCode = NULL, OTPExpiry = NULL, OTPAttempts = 0 WHERE UserID = ?", (user_id,))
+            return jsonify({"status": "error", "msg": "Ma OTP da het han. Vui long yeu cau ma moi."}), 400
+
+        # Kiem tra OTP co dung khong
+        if otp != stored_otp:
+            new_attempts = (otp_attempts or 0) + 1
+            cur.execute("UPDATE SystemUsers SET OTPAttempts = ? WHERE UserID = ?", (new_attempts, user_id))
+            remaining = 5 - new_attempts
+            log_audit("OTP_FAILED", username, f"Wrong OTP attempt {new_attempts}")
+            return jsonify({
+                "status": "error", 
+                "msg": f"Ma OTP khong dung. Con {remaining} lan thu."
+            }), 400
+
+        # OTP dung! Tao reset token tam thoi de dung cho buoc doi mat khau
+        reset_token = str(uuid.uuid4())
+        cur.execute("""
+            UPDATE SystemUsers 
+            SET ResetToken = ?, ResetTokenExpiry = DATEADD(MINUTE, 15, GETDATE()),
+                OTPCode = NULL, OTPExpiry = NULL, OTPAttempts = 0
+            WHERE UserID = ?
+        """, (reset_token, user_id))
+
+        log_audit("OTP_VERIFIED", username, "OTP verified successfully")
+        return jsonify({
+            "status": "success",
+            "msg": "Xac nhan OTP thanh cong!",
+            "reset_token": reset_token
+        })
+
+    except Exception as e:
+        print(f"Error in verify_otp: {e}")
+        return jsonify({"status": "error", "msg": "Loi xac nhan OTP"}), 500
+
+
+@router.route("/api/reset-password", methods=["POST"])
+def reset_password():
+    """Doi mat khau moi sau khi xac nhan OTP."""
+    data = request.json
+    reset_token = data.get('reset_token', data.get('token', ''))
+    new_password = data.get('new_password', '')
+
+    if not reset_token or not new_password:
+        return jsonify({"status": "error", "msg": "Thieu thong tin"}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"status": "error", "msg": "Mat khau phai co it nhat 6 ky tu"}), 400
+
+    try:
+        auth = get_auth_connection()
+        auth.autocommit = True
+        cur = auth.cursor()
+
+        cur.execute("""
+            SELECT UserID, Username FROM SystemUsers 
+            WHERE ResetToken = ? AND ResetTokenExpiry > GETDATE()
+        """, (reset_token,))
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"status": "error", "msg": "Phien da het han. Vui long thuc hien lai."}), 400
+
         user_id, username = row
         hashed = generate_password_hash(new_password)
-        
-        cur.execute("UPDATE SystemUsers SET PasswordHash = ?, ResetToken = NULL, ResetTokenExpiry = NULL, FailedAttempts = 0, LockedUntil = NULL WHERE UserID = ?", (hashed, user_id))
-        log_audit("PASSWORD_RESET_SUCCESS", username, "User reset password successfully")
-        
-        return jsonify({"status": "success", "msg": "Password updated successfully"})
+
+        cur.execute("""
+            UPDATE SystemUsers 
+            SET PasswordHash = ?, ResetToken = NULL, ResetTokenExpiry = NULL, 
+                FailedAttempts = 0, LockedUntil = NULL,
+                OTPCode = NULL, OTPExpiry = NULL, OTPAttempts = 0
+            WHERE UserID = ?
+        """, (hashed, user_id))
+
+        log_audit("PASSWORD_RESET_SUCCESS", username, "Password reset via OTP successfully")
+        return jsonify({"status": "success", "msg": "Doi mat khau thanh cong! Vui long dang nhap lai."})
+
     except Exception as e:
         print(f"Error in reset_password: {e}")
-        return jsonify({"status": "error", "msg": "Failed to reset password"}), 500
+        return jsonify({"status": "error", "msg": "Loi doi mat khau"}), 500
 
 
 # ============================================================
@@ -709,8 +931,8 @@ def update_employee(emp_id):
     phone = data.get("PhoneNumber")
     email = data.get("Email")
     hire_date = data.get("HireDate")
-    dept_id = data.get("DepartmentID")
-    pos_id = data.get("PositionID")
+    dept_id = data.get("DepartmentID") or None
+    pos_id = data.get("PositionID") or None
     status = data.get("Status")
 
     sql = None
@@ -747,7 +969,7 @@ def update_employee(emp_id):
         return jsonify({"status": "error", "msg": "Failed to update employee"}), 500
 
 # ============================================================
-# API: XÓA NHÂN VIÊN (DELETE)
+# API: XÓA NHÂN VIÊN (DELETE) – BR-05: Soft Delete Only
 # ============================================================
 @router.route("/api/employees/<int:emp_id>", methods=["DELETE"])
 @require_auth(["Admin", "HR"])
@@ -755,9 +977,10 @@ def delete_employee(emp_id):
     sql = None
     my = None
     try:
-        # BR-05: Soft delete only – set Status to 'Inactive'
         sql = get_sqlserver_connection()
         my = get_mysql_connection()
+        
+        # Thiết lập transaction ngay từ đầu để tránh lỗi PyODBC
         sql.autocommit = False
         my.start_transaction()
 
@@ -765,32 +988,42 @@ def delete_employee(emp_id):
         cur = sql.cursor()
         cur.execute("SELECT COUNT(*) FROM Dividends WHERE EmployeeID = ?", (emp_id,))
         if cur.fetchone()[0] > 0:
-            return jsonify({"status": "error", "msg": "Cannot delete: Employee has dividend records"}), 409
+            sql.rollback()
+            my.rollback()
+            sql.close()
+            my.close()
+            return jsonify({"status": "error", "msg": "Không thể vô hiệu hoá: Nhân viên có dữ liệu cổ tức"}), 409
 
         # Validation: check if Salaries exist
         my_cur = my.cursor()
         my_cur.execute("SELECT COUNT(*) FROM salaries WHERE EmployeeID = %s", (emp_id,))
         if my_cur.fetchone()[0] > 0:
-            return jsonify({"status": "error", "msg": "Cannot delete: Employee has salary records"}), 409
+            sql.rollback()
+            my.rollback()
+            sql.close()
+            my.close()
+            return jsonify({"status": "error", "msg": "Không thể vô hiệu hoá: Nhân viên có dữ liệu lương"}), 409
 
-        # BR-05: Soft delete only – set Status to 'Inactive'
-        cur.execute("UPDATE Employees SET Status = 'Inactive' WHERE EmployeeID=?", (emp_id,))
-
-        my_cur = my.cursor()
-        my_cur.execute("UPDATE employees_payroll SET Status='Inactive' WHERE EmployeeID=%s", (emp_id,))
+        # BR-05: Soft delete – chỉ đặt Status = Inactive, không xóa dòng
+        cur.execute("UPDATE Employees SET Status = 'Inactive' WHERE EmployeeID = ?", (emp_id,))
+        my_cur.execute("UPDATE employees_payroll SET Status = 'Inactive' WHERE EmployeeID = %s", (emp_id,))
 
         sql.commit()
         my.commit()
 
-        username = getattr(request, 'current_user', {}).get('username', 'system')
-        log_audit("EMPLOYEE_DEACTIVATED", username, f"Employee {emp_id} set to Inactive")
+        username = request.current_user.get('username', 'system')
+        log_audit("EMPLOYEE_DEACTIVATED", username, f"Employee {emp_id} set to Inactive (BR-05 soft delete)")
 
-        return jsonify({"status": "success", "msg": "Employee deactivated successfully"})
+        return jsonify({"status": "success", "msg": "Nhân viên đã được vô hiệu hoá thành công"})
     except Exception as e:
-        if sql: sql.rollback()
-        if my: my.rollback()
+        if sql:
+            try: sql.rollback()
+            except: pass
+        if my:
+            try: my.rollback()
+            except: pass
         print(f"Error in delete_employee: {e}")
-        return jsonify({"status": "error", "msg": "Failed to delete employee"}), 500
+        return jsonify({"status": "error", "msg": "Lỗi vô hiệu hoá nhân viên"}), 500
 
 # ============================================================
 # NEW API: DIVIDENDS DATA
@@ -835,16 +1068,11 @@ def get_dividends_summary():
 @router.route("/api/profile", methods=["GET", "PUT"])
 @require_auth()
 def profile_handler():
-    auth_header = request.headers.get("Authorization", "")
-    from jwt_utils import decode_token
-    token = auth_header.split(" ", 1)[1] if auth_header.startswith("Bearer ") else ""
-    payload = decode_token(token) if token else None
-    
-    if not payload:
-        return jsonify({"msg": "Unauthorized"}), 401
-        
+    # Dùng request.current_user đã được set bởi @require_auth, không cần decode lại
+    payload = request.current_user
     username = payload.get("username")
     email = payload.get("email")
+    employee_id = payload.get("employee_id")
 
     if request.method == "GET":
         try:
@@ -857,8 +1085,9 @@ def profile_handler():
 
             user_info = {"UserID": row[0], "Username": row[1], "Email": row[2] or "", "Role": row[3]}
 
-            # Try to find matching employee by email
-            if user_info["Email"]:
+            # Lấy thông tin nhân viên từ SQL Server – ưu tiên dùng EmployeeID từ token
+            emp_email = user_info["Email"]
+            if emp_email:
                 sql = get_sqlserver_connection()
                 ecur = sql.cursor()
                 ecur.execute("""
@@ -868,7 +1097,7 @@ def profile_handler():
                     LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID
                     LEFT JOIN Positions p ON e.PositionID = p.PositionID
                     WHERE e.Email = ?
-                """, (user_info["Email"],))
+                """, (emp_email,))
                 emp = ecur.fetchone()
                 if emp:
                     user_info.update({
@@ -879,34 +1108,43 @@ def profile_handler():
                     })
             return jsonify(user_info)
         except Exception as e:
+            print(f"Error in profile GET: {e}")
             return jsonify({"error": str(e)}), 500
 
     elif request.method == "PUT":
         data = request.json
-        full_name = data.get("FullName")
-        phone = data.get("PhoneNumber")
-        
+        full_name = data.get("FullName", "").strip()
+        phone = data.get("PhoneNumber", "").strip()
+
+        if not full_name:
+            return jsonify({"status": "error", "msg": "FullName không được để trống"}), 400
+
         try:
-            # 1. Update SQL Server Employees table if email matches
+            # 1. Update SQL Server Employees – tìm theo email
             if email:
                 sql = get_sqlserver_connection()
                 sql.autocommit = True
                 cur = sql.cursor()
-                cur.execute("UPDATE Employees SET FullName = ?, PhoneNumber = ? WHERE Email = ?", 
-                           (full_name, phone, email))
-                
-                # 2. Update MySQL employees_payroll table
+                cur.execute(
+                    "UPDATE Employees SET FullName = ?, PhoneNumber = ? WHERE Email = ?",
+                    (full_name, phone, email)
+                )
+
+            # 2. Update MySQL employees_payroll – dùng EmployeeID từ JWT token
+            if employee_id:
                 my = get_mysql_connection()
                 my.autocommit = True
                 mcur = my.cursor()
-                mcur.execute("UPDATE employees_payroll SET FullName = %s WHERE EmployeeID = (SELECT EmployeeID FROM (SELECT EmployeeID FROM employees_payroll WHERE Email = %s OR FullName = %s LIMIT 1) as t)", 
-                            (full_name, email, full_name))
-            
-            log_audit("PROFILE_UPDATED", username, f"Updated FullName to {full_name}")
-            return jsonify({"status": "success", "msg": "Profile updated successfully"})
+                mcur.execute(
+                    "UPDATE employees_payroll SET FullName = %s WHERE EmployeeID = %s",
+                    (full_name, employee_id)
+                )
+
+            log_audit("PROFILE_UPDATED", username, f"Updated FullName={full_name}, Phone={phone}")
+            return jsonify({"status": "success", "msg": "Cập nhật hồ sơ thành công"})
         except Exception as e:
             print(f"Error updating profile: {e}")
-            return jsonify({"status": "error", "msg": str(e)}), 500
+            return jsonify({"status": "error", "msg": "Lỗi cập nhật hồ sơ"}), 500
 
 
 # ============================================================

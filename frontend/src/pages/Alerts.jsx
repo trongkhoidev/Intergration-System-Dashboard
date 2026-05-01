@@ -9,7 +9,8 @@ export default function Alerts() {
   const [filterType, setFilterType] = useState('All');
   const [filterSeverity, setFilterSeverity] = useState('All');
 
-  useEffect(() => {
+  const loadAlerts = () => {
+    setLoading(true);
     fetchAuth(`${API_BASE}/alerts`)
       .then(res => res.json())
       .then(data => {
@@ -19,10 +20,14 @@ export default function Alerts() {
         console.error(err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadAlerts();
   }, []);
 
-  const handleAlertAction = (alertId) => {
-    setAlerts(prev => prev.filter(a => (a.id || a.message) !== alertId));
+  const handleAlertAction = (alertIndex) => {
+    setAlerts(prev => prev.filter((_, i) => i !== alertIndex));
     setSelectedAlert(null);
   };
 
@@ -39,9 +44,9 @@ export default function Alerts() {
           <h1 className="page-title">System Alerts</h1>
           <p className="page-subtitle">Monitor and resolve system-generated notifications</p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-3 align-items-center">
            <span className="badge bg-danger-light text-danger p-2 px-3 rounded-pill fw-bold">
-             {alerts.length} Pending Resolutions
+             {alerts.length} Active System Flags
            </span>
         </div>
       </div>
@@ -52,9 +57,10 @@ export default function Alerts() {
             <div className="p-3 border-bottom d-flex gap-2 flex-wrap bg-light">
               <select className="form-select form-select-sm w-auto" value={filterType} onChange={e => setFilterType(e.target.value)}>
                 <option value="All">All Types</option>
-                <option value="Salary">Salary Anomalies</option>
-                <option value="Attendance">Attendance</option>
-                <option value="System">System</option>
+                <option value="Salary anomaly">Salary Anomalies</option>
+                <option value="Excessive leave">Leave Limits</option>
+                <option value="Birthday">Birthdays</option>
+                <option value="Work anniversary">Anniversaries</option>
               </select>
               <select className="form-select form-select-sm w-auto" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
                 <option value="All">All Severities</option>
@@ -88,8 +94,8 @@ export default function Alerts() {
                     filteredAlerts.map((a, i) => (
                       <tr 
                         key={i} 
-                        className={`hover-row ${selectedAlert === a ? 'bg-primary-light' : ''}`} 
-                        onClick={() => setSelectedAlert(a)}
+                        className={`hover-row ${selectedAlert?.index === i ? 'bg-primary-light' : ''}`} 
+                        onClick={() => setSelectedAlert({ ...a, index: i })}
                         style={{ cursor: 'pointer' }}
                       >
                         <td className="ps-4">
@@ -120,7 +126,7 @@ export default function Alerts() {
             <AlertDetailPanel 
               alert={selectedAlert} 
               onClose={() => setSelectedAlert(null)} 
-              onAction={handleAlertAction} 
+              onAction={() => handleAlertAction(selectedAlert?.index)} 
             />
           </div>
         )}

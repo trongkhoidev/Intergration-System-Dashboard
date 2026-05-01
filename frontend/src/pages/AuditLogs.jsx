@@ -33,34 +33,34 @@ export default function AuditLogs() {
         </button>
       </div>
 
-      <div className="table-container p-0 border-0 shadow-sm animate-slide-up glass-card">
+      <div className="table-container p-0 border-0 shadow-sm animate-slide-up bg-white rounded-4 overflow-hidden">
         <div className="table-responsive">
-          <table className="table-custom">
+          <table className="data-table align-middle">
             <thead>
               <tr>
-                <th>Event ID</th>
+                <th className="ps-4">Event ID</th>
                 <th>Timestamp</th>
                 <th>Identity</th>
                 <th>Action Segment</th>
-                <th>Event Details</th>
+                <th className="pe-4">Event Details</th>
               </tr>
             </thead>
             {loading ? <TableSkeleton rows={10} columns={5} /> : (
               <tbody>
                 {logs.map((log) => (
                   <tr key={log.LogID}>
-                    <td className="text-muted extra-small fw-bold">EVT-{String(log.LogID).padStart(5, '0')}</td>
+                    <td className="text-muted extra-small fw-bold ps-4">EVT-{String(log.LogID).padStart(5, '0')}</td>
                     <td className="small">{new Date(log.Timestamp).toLocaleString()}</td>
                     <td className="fw-bold text-dark">{log.Username}</td>
                     <td>
-                      <span className="badge bg-light text-dark border px-2 py-1">
+                      <span className="badge bg-light text-dark border px-3 py-2 rounded-pill fw-bold" style={{ fontSize: '0.75rem' }}>
                         {log.Action}
                       </span>
                     </td>
-                    <td className="small text-muted">{log.Details}</td>
+                    <td className="small text-muted pe-4">{log.Details}</td>
                   </tr>
                 ))}
-                {logs.length === 0 && <tr><td colSpan="5" className="text-center py-5">No security events recorded</td></tr>}
+                {logs.length === 0 && <tr><td colSpan="5" className="text-center py-5 text-muted"><i className="bi bi-shield-x fs-1 d-block mb-2"></i>No security events recorded</td></tr>}
               </tbody>
             )}
           </table>
