@@ -1,5 +1,6 @@
-export const API_BASE = "http://localhost:5001/api";
-export const APP_URL = "http://localhost:5001";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
+export const API_BASE = `${BASE_URL}/api`;
+export const APP_URL = BASE_URL;
 
 // Wrapper around fetch that automatically includes JWT token
 export const fetchAuth = async (url, options = {}) => {
