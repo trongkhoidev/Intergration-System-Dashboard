@@ -10,7 +10,8 @@ def load_env():
             for line in f:
                 if line.strip() and not line.startswith("#"):
                     key, value = line.strip().split("=", 1)
-                    os.environ[key] = value
+                    if key not in os.environ:
+                        os.environ[key] = value
 
 load_env()
 

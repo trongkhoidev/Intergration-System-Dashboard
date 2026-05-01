@@ -100,7 +100,10 @@ def setup_auth():
         main_db = os.environ.get('SQL_DATABASE', 'HUMAN_2025')
 
         print(f"Creating database {auth_db} if not exists...")
-        cur.execute(f"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{auth_db}') CREATE DATABASE {auth_db}")
+        try:
+            cur.execute(f"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{auth_db}') CREATE DATABASE {auth_db}")
+        except Exception as e:
+            print(f"Skipping DB creation (likely on Somee): {e}")
 
         conn.close()
         conn_str_auth = conn_str + f"DATABASE={auth_db};"
