@@ -239,7 +239,11 @@ def setup_auth():
                 (username, email, hashed, role, emp_id),
             )
             synced_count += 1
-            print(f"  [+] {full_name} ({email}) -> Role: {role} | Dept: {dept_name} | Pos: {pos_name} | Username: {username}".encode('utf-8', errors='replace').decode('utf-8', errors='replace'))
+            # In ra log đơn giản hơn để tránh lỗi Unicode terminal
+            try:
+                print(f"  [+] Synced: {username} ({role})")
+            except:
+                pass
 
         conn_main.close()
 
