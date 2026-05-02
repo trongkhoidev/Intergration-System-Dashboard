@@ -947,10 +947,7 @@ def update_employee(emp_id):
     my = None
     try:
         sql = get_sqlserver_connection()
-        my = get_mysql_connection()
         sql.autocommit = False
-        my.start_transaction()
-
         cur = sql.cursor()
         cur.execute("""
             UPDATE Employees
@@ -958,23 +955,30 @@ def update_employee(emp_id):
                 Email=?, HireDate=?, DepartmentID=?, PositionID=?, Status=?
             WHERE EmployeeID=?
         """, (full_name, dob, gender, phone, email, hire_date, dept_id, pos_id, status, emp_id))
-
-        my_cur = my.cursor()
-        my_cur.execute("""
-            UPDATE employees_payroll
-            SET FullName=%s, DepartmentID=%s, PositionID=%s, Status=%s
-            WHERE EmployeeID=%s
-        """, (full_name, dept_id, pos_id, status, emp_id))
-
         sql.commit()
-        my.commit()
+
+        # Sync to MySQL - optional, do not crash if fails
+        try:
+            my = get_mysql_connection()
+            my_cur = my.cursor()
+            my_cur.execute("""
+                UPDATE employees_payroll
+                SET FullName=%s, DepartmentID=%s, PositionID=%s, Status=%s
+                WHERE EmployeeID=%s
+            """, (full_name, dept_id, pos_id, status, emp_id))
+            my.commit()
+        except Exception as mysql_err:
+            print(f"[WARN] MySQL sync failed for update_employee {emp_id}: {mysql_err}")
 
         return jsonify({"status": "success", "msg": "Update thành công"})
     except Exception as e:
-        if sql: sql.rollback()
-        if my: my.rollback()
-        print(f"Error in update_employee: {e}")
-        return jsonify({"status": "error", "msg": "Failed to update employee"}), 500
+        if sql:
+            try: sql.rollback()
+            except: pass
+        import traceback
+        print(f"[ERROR] update_employee {emp_id}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"status": "error", "msg": "Failed to update employee", "debug": str(e)}), 500
 
 # ============================================================
 # API: XÓA NHÂN VIÊN (DELETE) – BR-05: Soft Delete Only
@@ -986,48 +990,35 @@ def delete_employee(emp_id):
     my = None
     try:
         sql = get_sqlserver_connection()
-        my = get_mysql_connection()
-        
-        # Thiết lập transaction ngay từ đầu để tránh lỗi PyODBC
         sql.autocommit = False
-        my.start_transaction()
-
-        # Validation: check if Dividends exist
         cur = sql.cursor()
+
+        # Validation: check if Dividends exist (SQL Server)
         cur.execute("SELECT COUNT(*) FROM Dividends WHERE EmployeeID = ?", (emp_id,))
         if cur.fetchone()[0] > 0:
             sql.rollback()
-            my.rollback()
-            sql.close()
-            my.close()
-            return jsonify({"status": "error", "msg": "Không thể vô hiệu hoá: Nhân viên có dữ liệu cổ tức"}), 409
+            return jsonify({"status": "error", "msg": "Khong the vo hieu hoa: Nhan vien co du lieu co tuc"}), 409
 
-        # Validation: check if Salaries exist
-        my_cur = my.cursor()
-        my_cur.execute("SELECT COUNT(*) FROM salaries WHERE EmployeeID = %s", (emp_id,))
-        if my_cur.fetchone()[0] > 0:
-            sql.rollback()
-            my.rollback()
-            sql.close()
-            my.close()
-            return jsonify({"status": "error", "msg": "Không thể vô hiệu hoá: Nhân viên có dữ liệu lương"}), 409
-
-        # BR-05: Soft delete – chỉ đặt Status = Inactive, không xóa dòng
+        # BR-05: Soft delete
         cur.execute("UPDATE Employees SET Status = 'Inactive' WHERE EmployeeID = ?", (emp_id,))
-        my_cur.execute("UPDATE employees_payroll SET Status = 'Inactive' WHERE EmployeeID = %s", (emp_id,))
-
         sql.commit()
-        my.commit()
+
+        # Sync to MySQL - optional
+        try:
+            my = get_mysql_connection()
+            my_cur = my.cursor()
+            # Check salaries in MySQL (informational only)
+            my_cur.execute("SELECT COUNT(*) FROM salaries WHERE EmployeeID = %s", (emp_id,))
+            if my_cur.fetchone()[0] > 0:
+                print(f"[INFO] Employee {emp_id} has salary records in MySQL")
+            my_cur.execute("UPDATE employees_payroll SET Status = 'Inactive' WHERE EmployeeID = %s", (emp_id,))
+            my.commit()
+        except Exception as mysql_err:
+            print(f"[WARN] MySQL sync failed for delete_employee {emp_id}: {mysql_err}")
 
         username = request.current_user.get('username', 'system')
         log_audit("EMPLOYEE_DEACTIVATED", username, f"Employee {emp_id} set to Inactive (BR-05 soft delete)")
 
-        return jsonify({"status": "success", "msg": "Nhân viên đã được vô hiệu hoá thành công"})
-    except Exception as e:
-        if sql:
-            try: sql.rollback()
-            except: pass
-        if my:
             try: my.rollback()
             except: pass
         print(f"Error in delete_employee: {e}")
