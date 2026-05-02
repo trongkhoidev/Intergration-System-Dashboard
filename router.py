@@ -1018,11 +1018,15 @@ def delete_employee(emp_id):
 
         username = request.current_user.get('username', 'system')
         log_audit("EMPLOYEE_DEACTIVATED", username, f"Employee {emp_id} set to Inactive (BR-05 soft delete)")
-
-            try: my.rollback()
+        return jsonify({"status": "success", "msg": "Nhan vien da duoc vo hieu hoa thanh cong"})
+    except Exception as e:
+        if sql:
+            try: sql.rollback()
             except: pass
-        print(f"Error in delete_employee: {e}")
-        return jsonify({"status": "error", "msg": "Lỗi vô hiệu hoá nhân viên"}), 500
+        import traceback
+        print(f"[ERROR] delete_employee {emp_id}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"status": "error", "msg": "Loi vo hieu hoa nhan vien", "debug": str(e)}), 500
 
 # ============================================================
 # NEW API: DIVIDENDS DATA
