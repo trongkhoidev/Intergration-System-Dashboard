@@ -51,7 +51,6 @@ export default function Employees() {
     ]).then(([emps, depts, posts]) => {
       setEmployees(Array.isArray(emps) ? emps : []);
       setDepartments(Array.isArray(depts) ? depts : []);
-      setPositions(Array.isArray(posts) ? posts : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);

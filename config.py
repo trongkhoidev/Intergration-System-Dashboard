@@ -10,7 +10,8 @@ def load_env():
             for line in f:
                 if line.strip() and not line.startswith("#"):
                     key, value = line.strip().split("=", 1)
-                    os.environ[key] = value
+                    if key not in os.environ:
+                        os.environ[key] = value
 
 load_env()
 
@@ -36,6 +37,7 @@ def get_mysql_connection():
     try:
         conn = mysql.connector.connect(
             host=os.environ.get('MYSQL_HOST'),
+            port=int(os.environ.get('MYSQL_PORT', 3306)),
             user=os.environ.get('MYSQL_USER'),
             password=os.environ.get('MYSQL_PASSWORD'),
             database=os.environ.get('MYSQL_DATABASE'),
