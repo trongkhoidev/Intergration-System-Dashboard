@@ -877,14 +877,12 @@ def add_employee():
     my = None
     try:
         sql = get_sqlserver_connection()
+        sql.autocommit = False
         cur = sql.cursor()
         cur.execute("SELECT COUNT(*) FROM Employees WHERE Email = ?", (email,))
         if cur.fetchone()[0] > 0:
+            sql.rollback()
             return jsonify({"status": "error", "msg": "Email đã tồn tại"}), 400
-
-        my = get_mysql_connection()
-        sql.autocommit = False
-        my.start_transaction()
 
         cur.execute("""
             INSERT INTO Employees
@@ -896,16 +894,20 @@ def add_employee():
 
         row = cur.fetchone()
         new_id = int(row[0])
-
-        my_cur = my.cursor()
-        my_cur.execute("""
-            INSERT INTO employees_payroll
-            (EmployeeID, FullName, DepartmentID, PositionID, Status)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (new_id, full_name, dept_id, pos_id, status))
-
         sql.commit()
-        my.commit()
+
+        # Sync to MySQL - optional, log warning if fails
+        try:
+            my = get_mysql_connection()
+            my_cur = my.cursor()
+            my_cur.execute("""
+                INSERT INTO employees_payroll
+                (EmployeeID, FullName, DepartmentID, PositionID, Status)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (new_id, full_name, dept_id, pos_id, status))
+            my.commit()
+        except Exception as mysql_err:
+            print(f"[WARN] MySQL sync failed for new employee {new_id}: {mysql_err}")
 
         return jsonify({
             "status": "success",
