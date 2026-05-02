@@ -914,10 +914,14 @@ def add_employee():
             "msg": f"Thêm nhân viên thành công (ID = {new_id})"
         })
     except Exception as e:
-        if sql: sql.rollback()
-        if my: my.rollback()
-        print(f"Error in add_employee: {e}")
-        return jsonify({"status": "error", "msg": "Failed to add employee"}), 500
+        if sql:
+            try: sql.rollback()
+            except: pass
+        import traceback
+        err_detail = traceback.format_exc()
+        print(f"[ERROR] add_employee: {e}")
+        print(err_detail)
+        return jsonify({"status": "error", "msg": "Failed to add employee", "debug": str(e)}), 500
 
 # ============================================================
 # API: CẬP NHẬT NHÂN VIÊN (PUT)
