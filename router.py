@@ -323,13 +323,16 @@ def get_attendance():
         month = request.args.get('month')
         
         query = """
-            SELECT e.FullName, e.Status, SUM(a.WorkDays) as WorkDays, SUM(a.LeaveDays) as LeaveDays, SUM(a.AbsentDays) as AbsentDays
-            FROM attendance a
-            JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
+            SELECT e.FullName, e.Status, 
+                   COALESCE(SUM(a.WorkDays), 0) as WorkDays, 
+                   COALESCE(SUM(a.LeaveDays), 0) as LeaveDays, 
+                   COALESCE(SUM(a.AbsentDays), 0) as AbsentDays
+            FROM employees_payroll e
+            LEFT JOIN attendance a ON e.EmployeeID = a.EmployeeID
         """
         
         if month and month != 'All Months':
-            query += " WHERE DATE_FORMAT(a.AttendanceMonth, '%M %Y') = %s"
+            query += " WHERE DATE_FORMAT(a.AttendanceMonth, '%M %Y') = %s OR a.AttendanceMonth IS NULL"
             query += " GROUP BY e.EmployeeID, e.FullName, e.Status"
             cur.execute(query, (month,))
         else:
