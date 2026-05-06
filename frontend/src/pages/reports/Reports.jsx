@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { getCurrentUser } from '../utils/auth';
-import HRReport from './reports/HRReport';
-import PayrollReport from './reports/PayrollReport';
-import AttendanceReport from './reports/AttendanceReport';
-import DividendReport from './reports/DividendReport';
+import { getCurrentUser } from '../../utils/auth';
+
+import HRReport from './HRReport';
+import PayrollReport from './PayrollReport';
+import AttendanceReport from './AttendanceReport';
+import DividendReport from './DividendReport';
 
 export default function Reports() {
   const user = getCurrentUser();

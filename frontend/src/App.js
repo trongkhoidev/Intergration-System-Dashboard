@@ -6,7 +6,7 @@ import EmployeeEdit from './pages/EmployeeEdit';
 import Login from './pages/Login';
 import Payroll from './pages/Payroll';
 import Attendance from './pages/Attendance';
-import Reports from './pages/Reports';
+import Reports from './pages/reports/Reports';
 import Alerts from './pages/Alerts';
 import Profile from './pages/Profile';
 import ForgotPassword from './pages/ForgotPassword';
