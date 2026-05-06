@@ -339,9 +339,21 @@ def get_attendance():
             query += " GROUP BY e.EmployeeID, e.FullName, e.Status"
             cur.execute(query)
             
-        return jsonify(cur.fetchall())
+        # Manually convert Decimals to float to avoid JSON serialization issues
+        results = []
+        for r in cur.fetchall():
+            results.append({
+                "FullName": r.get("FullName"),
+                "Status": r.get("Status"),
+                "WorkDays": float(r.get("WorkDays", 0)),
+                "LeaveDays": float(r.get("LeaveDays", 0)),
+                "AbsentDays": float(r.get("AbsentDays", 0))
+            })
+        return jsonify(results)
     except Exception as e:
         print(f"Error in get_attendance: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": "Failed to fetch attendance data"}), 500
 
 @router.route("/api/attendance/<int:emp_id>/summary")
@@ -1109,17 +1121,19 @@ def get_dividends():
         sql = get_sqlserver_connection()
         cur = sql.cursor()
         cur.execute("""
-            SELECT e.FullName, d.Amount
+            SELECT e.FullName, d.DividendAmount AS Amount
             FROM Dividends d
             JOIN Employees e ON d.EmployeeID = e.EmployeeID
         """)
         rows = [
-            {"FullName": r[0], "Amount": float(r[1])}
+            {"FullName": r[0], "Amount": float(r[1] or 0)}
             for r in cur.fetchall()
         ]
         return jsonify(rows)
     except Exception as e:
         print(f"Error in get_dividends: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify([])
 
 @router.route("/api/dividends/summary")
@@ -1128,11 +1142,13 @@ def get_dividends_summary():
     try:
         sql = get_sqlserver_connection()
         cur = sql.cursor()
-        cur.execute("SELECT SUM(Amount) FROM Dividends")
+        cur.execute("SELECT SUM(DividendAmount) FROM Dividends")
         total = cur.fetchone()[0] or 0
         return jsonify({"TotalDividends": float(total), "YieldRate": "5.2%", "LastPayout": "Mar 2024"})
     except Exception as e:
         print(f"Error in get_dividends_summary: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"TotalDividends": 0, "YieldRate": "0%", "LastPayout": "N/A"})
 
 
@@ -1227,15 +1243,68 @@ def profile_handler():
 @router.route("/api/reports/hr")
 @require_auth(["Admin", "HR"])
 def report_hr():
-    """FR7: HR report – employee distribution by department/status."""
+    """FR7: HR report – employee distribution by department/status.
+    Status is normalized to 4 categories matching frontend status.js:
+      Active:    'active', 'đang làm việc', 'working'
+      On Leave:  'on leave', 'leave', 'nghỉ phép'
+      Probation: 'probation', 'thử việc', 'trial', 'thực tập'
+      Inactive:  'inactive', 'terminated', 'resigned', 'nghỉ việc'
+    """
     try:
+        dept = request.args.get('dept')
+        status = request.args.get('status')
+        
         sql = get_sqlserver_connection()
         cur = sql.cursor()
-        cur.execute("""
-            SELECT d.DepartmentName, e.Status, COUNT(*) AS Cnt
+        
+        # CASE expression to normalize status – same mapping as status.js
+        status_case = """
+            CASE
+                WHEN LOWER(e.Status) IN ('inactive', 'terminated', 'resigned', N'nghỉ việc')
+                    THEN 'Inactive'
+                WHEN LOWER(e.Status) IN ('on leave', 'leave', N'nghỉ phép')
+                    THEN 'On Leave'
+                WHEN LOWER(e.Status) IN ('probation', N'thử việc', 'trial', N'thực tập')
+                    THEN 'Probation'
+                ELSE 'Active'
+            END"""
+        
+        query = f"""
+            SELECT d.DepartmentName, {status_case} AS NormalizedStatus, COUNT(*) AS Cnt
             FROM Employees e LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID
-            GROUP BY d.DepartmentName, e.Status ORDER BY d.DepartmentName
-        """)
+        """
+        
+        conditions = []
+        params = []
+        
+        if dept:
+            conditions.append("d.DepartmentName = ?")
+            params.append(dept)
+        if status:
+            # Filter using the same CASE logic
+            if status == 'Inactive':
+                conditions.append("LOWER(e.Status) IN ('inactive', 'terminated', 'resigned', N'nghỉ việc')")
+            elif status == 'On Leave':
+                conditions.append("LOWER(e.Status) IN ('on leave', 'leave', N'nghỉ phép')")
+            elif status == 'Probation':
+                conditions.append("LOWER(e.Status) IN ('probation', N'thử việc', 'trial', N'thực tập')")
+            elif status == 'Active':
+                conditions.append("""LOWER(e.Status) NOT IN (
+                    'inactive', 'terminated', 'resigned', N'nghỉ việc',
+                    'on leave', 'leave', N'nghỉ phép',
+                    'probation', N'thử việc', 'trial', N'thực tập'
+                )""")
+            
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+            
+        query += f" GROUP BY d.DepartmentName, {status_case} ORDER BY d.DepartmentName"
+        
+        if params:
+            cur.execute(query, tuple(params))
+        else:
+            cur.execute(query)
+            
         rows = [{"Department": r[0] or "Unassigned", "Status": r[1], "Count": r[2]} for r in cur.fetchall()]
         return jsonify(rows)
     except Exception as e:
@@ -1269,15 +1338,27 @@ def report_attendance():
     try:
         my = get_mysql_connection()
         cur = my.cursor(dictionary=True)
+
         cur.execute("""
-            SELECT e.FullName, SUM(a.LeaveDays) as TotalLeave, SUM(a.AbsentDays) as TotalAbsent
-            FROM attendance a
-            JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
-            GROUP BY e.FullName
+            SELECT 
+                e.FullName,
+                e.Status,
+                COALESCE(SUM(a.WorkDays), 0) AS WorkDays,
+                COALESCE(SUM(a.LeaveDays), 0) AS LeaveDays,
+                COALESCE(SUM(a.AbsentDays), 0) AS AbsentDays,
+                COALESCE(SUM(a.WorkDays), 0) AS TotalWork,
+                COALESCE(SUM(a.LeaveDays), 0) AS TotalLeave,
+                COALESCE(SUM(a.AbsentDays), 0) AS TotalAbsent
+            FROM employees_payroll e
+            LEFT JOIN attendance a ON e.EmployeeID = a.EmployeeID
+            GROUP BY e.EmployeeID, e.FullName, e.Status
             ORDER BY TotalAbsent DESC, TotalLeave DESC
             LIMIT 10
         """)
-        return jsonify(cur.fetchall())
+
+        rows = cur.fetchall()
+        return jsonify(rows)
+
     except Exception as e:
         print(f"Error report_attendance: {e}")
         return jsonify([])
@@ -1288,14 +1369,35 @@ def report_dividends():
     try:
         sql = get_sqlserver_connection()
         cur = sql.cursor()
-        try:
-            cur.execute("SELECT e.FullName, d.Amount FROM Dividends d JOIN Employees e ON d.EmployeeID = e.EmployeeID")
-            data = [{"FullName": row[0], "Amount": row[1]} for row in cur.fetchall()]
-            return jsonify(data)
-        except Exception:
-            return jsonify([])
+
+        cur.execute("""
+            SELECT 
+                e.FullName,
+                COALESCE(d.DividendAmount, 0) AS Amount,
+                d.DividendDate
+            FROM Dividends d
+            JOIN Employees e ON d.EmployeeID = e.EmployeeID
+            ORDER BY d.DividendAmount DESC
+        """)
+
+        data = [
+            {
+                "FullName": row[0],
+                "Amount": float(row[1] or 0),
+                "DividendDate": row[2].strftime("%Y-%m-%d") if row[2] else None
+            }
+            for row in cur.fetchall()
+        ]
+
+        cur.close()
+        sql.close()
+
+        return jsonify(data)
+
     except Exception as e:
         print(f"Error report_dividends: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify([])
 
 
