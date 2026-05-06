@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import AlertDetailPanel from '../components/AlertDetailPanel';
 import { API_BASE, fetchAuth } from '../api';
+import { getCurrentUser } from '../utils/auth';
 
 export default function Alerts() {
+  const user = getCurrentUser();
+  const role = user.role?.toLowerCase() || 'employee';
+
   const [alerts, setAlerts] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,7 +18,13 @@ export default function Alerts() {
     fetchAuth(`${API_BASE}/alerts`)
       .then(res => res.json())
       .then(data => {
-        setAlerts(Array.isArray(data) ? data : []);
+        let loadedAlerts = Array.isArray(data) ? data : [];
+        if (role === 'hr') {
+          loadedAlerts = loadedAlerts.filter(a => ['Excessive leave', 'Birthday', 'Work anniversary'].includes(a.type));
+        } else if (role === 'payroll') {
+          loadedAlerts = loadedAlerts.filter(a => a.type === 'Salary anomaly');
+        }
+        setAlerts(loadedAlerts);
         setLoading(false);
       }).catch(err => {
         console.error(err);
@@ -57,10 +67,10 @@ export default function Alerts() {
             <div className="p-3 border-bottom d-flex gap-2 flex-wrap bg-light">
               <select className="form-select form-select-sm w-auto" value={filterType} onChange={e => setFilterType(e.target.value)}>
                 <option value="All">All Types</option>
-                <option value="Salary anomaly">Salary Anomalies</option>
-                <option value="Excessive leave">Leave Limits</option>
-                <option value="Birthday">Birthdays</option>
-                <option value="Work anniversary">Anniversaries</option>
+                {['admin', 'payroll'].includes(role) && <option value="Salary anomaly">Salary Anomalies</option>}
+                {['admin', 'hr'].includes(role) && <option value="Excessive leave">Leave Limits</option>}
+                {['admin', 'hr'].includes(role) && <option value="Birthday">Birthdays</option>}
+                {['admin', 'hr'].includes(role) && <option value="Work anniversary">Anniversaries</option>}
               </select>
               <select className="form-select form-select-sm w-auto" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
                 <option value="All">All Severities</option>
@@ -107,7 +117,7 @@ export default function Alerts() {
                           <div className="text-dark fw-600 text-truncate" style={{ maxWidth: 250 }}>{a.message}</div>
                         </td>
                         <td>
-                          <span className={`badge badge-${a.severity === 'critical' ? 'active' : a.severity === 'warning' ? 'probation' : 'inactive'}`}>
+                          <span className={`badge badge-${a.severity === 'critical' ? 'danger' : a.severity === 'warning' ? 'leave' : 'active'}`}>
                             {a.severity}
                           </span>
                         </td>

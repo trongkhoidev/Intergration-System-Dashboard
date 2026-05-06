@@ -61,7 +61,6 @@ function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/employees/:id" element={<EmployeeEdit />} />
-        <Route path="/payroll" element={<Payroll />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/alerts" element={<Alerts />} />
