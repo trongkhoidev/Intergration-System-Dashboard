@@ -3,16 +3,10 @@ import { Link } from 'react-router-dom';
 import { API_BASE, fetchAuth } from '../api';
 import { getCurrentUser } from '../utils/auth';
 import AddEmployeeModal from '../components/AddEmployeeModal';
-
+import { getStatusPresentation } from '../utils/status';
 function StatusBadge({ status }) {
-  const map = {
-    'Active': 'badge-active',
-    'Inactive': 'badge-inactive',
-    'On Leave': 'badge-leave',
-    'Probation': 'badge-probation',
-    'Intern': 'badge-probation',
-  };
-  return <span className={`badge ${map[status] || 'badge-inactive'}`}>{status || 'Unknown'}</span>;
+  const presentation = getStatusPresentation(status);
+  return <span className={`badge ${presentation.className}`}>{presentation.label}</span>;
 }
 
 export default function Employees() {
@@ -39,7 +33,7 @@ export default function Employees() {
 
   const showToast = (type, msg) => {
     setToast({ type, msg });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 3000);
   };
 
   const load = useCallback(() => {
@@ -66,7 +60,7 @@ export default function Employees() {
       e.EmployeeID?.toString().includes(term) ||
       e.Department?.toLowerCase().includes(term);
     const matchDept = !filterDept || e.Department === filterDept;
-    const matchStatus = !filterStatus || e.Status === filterStatus;
+    const matchStatus = !filterStatus || getStatusPresentation(e.Status).label === filterStatus;
     return matchSearch && matchDept && matchStatus;
   });
 
@@ -83,10 +77,10 @@ export default function Employees() {
           showToast('success', 'Employee deactivated successfully');
           load();
         } else {
-          showToast('error', rs.msg || 'Cannot deactivate employee');
+          showToast('error', rs.msg || 'Cannot delete employee');
         }
       })
-      .catch(() => { setDeleteTarget(null); showToast('error', 'Server connection error'); });
+      .catch(() => { setDeleteTarget(null); showToast('error', 'Server error'); });
   };
 
   return (
@@ -97,8 +91,8 @@ export default function Employees() {
           <div className={`toast-premium alert-${toast.type === 'success' ? 'success' : 'danger'}`}>
             <i className={`bi bi-${toast.type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'}`}></i>
             <div>
-              <div className="fw-bold">{toast.type === 'success' ? 'Success' : 'Error Occurred'}</div>
-              <div className="small text-muted">{toast.msg}</div>
+              <div className="fw-bold">{toast.type === 'success' ? 'Success' : 'Attention'}</div>
+              <div className="small opacity-75">{toast.msg}</div>
             </div>
           </div>
         </div>
@@ -114,11 +108,11 @@ export default function Employees() {
               </div>
               <h4 className="fw-bold mb-2">Deactivate Employee</h4>
               <p className="text-muted mb-4">
-                Are you sure you want to deactivate <strong>{deleteTarget.name}</strong>? Their status will be changed to "Inactive".
+                Are you sure you want to deactivate <strong>{deleteTarget.name}</strong>? This action will set their status to Inactive.
               </p>
               <div className="d-flex gap-2 justify-content-center">
                 <button className="btn btn-outline px-4" onClick={() => setDeleteTarget(null)}>Cancel</button>
-                <button className="btn btn-danger px-4" onClick={confirmDelete}>Confirm Deactivation</button>
+                <button className="btn btn-danger px-4" onClick={confirmDelete}>Confirm</button>
               </div>
             </div>
           </div>
@@ -129,22 +123,22 @@ export default function Employees() {
       <AddEmployeeModal
         isOpen={addOpen}
         onClose={() => setAddOpen(false)}
-        onSave={() => { showToast('success', 'New employee added successfully!'); load(); }}
+        onSave={() => { showToast('success', 'Employee added successfully!'); load(); }}
       />
 
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Employee Directory</h1>
-          <p className="page-subtitle">Manage and monitor all employee profiles and statuses</p>
+          <h1 className="page-title">Directory</h1>
+          <p className="page-subtitle">Manage and monitor all staff members</p>
         </div>
         <div className="d-flex gap-2">
            <button className="btn btn-outline" onClick={load}>
-            <i className="bi bi-arrow-clockwise"></i> Refresh
+            <i className="bi bi-arrow-clockwise"></i>
           </button>
           {canEdit && (
-            <button className="btn btn-primary px-4" onClick={() => setAddOpen(true)}>
-              <i className="bi bi-person-plus-fill me-2"></i> Add Employee
+            <button className="btn btn-premium px-4" onClick={() => setAddOpen(true)}>
+              <i className="bi bi-person-plus-fill me-2"></i> Add New Employee
             </button>
           )}
         </div>
@@ -170,7 +164,7 @@ export default function Employees() {
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">Active</div>
-                <div className="stat-card-value text-success">{employees.filter(e => e.Status === 'Active').length}</div>
+                <div className="stat-card-value text-success">{employees.filter(e => getStatusPresentation(e.Status).label === 'Active').length}</div>
               </div>
               <div className="stat-card-icon bg-success-light text-success">
                 <i className="bi bi-person-check-fill"></i>
@@ -183,7 +177,7 @@ export default function Employees() {
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">On Leave</div>
-                <div className="stat-card-value text-warning">{employees.filter(e => e.Status === 'On Leave').length}</div>
+                <div className="stat-card-value text-warning">{employees.filter(e => getStatusPresentation(e.Status).label === 'On Leave').length}</div>
               </div>
               <div className="stat-card-icon bg-warning-light text-warning">
                 <i className="bi bi-person-dash-fill"></i>
@@ -215,7 +209,7 @@ export default function Employees() {
             <input
               type="text"
               className="form-control ps-5"
-              placeholder="Search by Name, ID or Department..."
+              placeholder="Search name, ID or department..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -228,10 +222,9 @@ export default function Employees() {
             <select className="form-select w-auto" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="">All Statuses</option>
               <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
               <option value="On Leave">On Leave</option>
               <option value="Probation">Probation</option>
-              <option value="Intern">Intern</option>
-              <option value="Inactive">Inactive</option>
             </select>
           </div>
         </div>
@@ -242,7 +235,7 @@ export default function Employees() {
             <thead>
               <tr>
                 <th className="ps-4">Employee</th>
-                <th>Contact Info</th>
+                <th>Contact</th>
                 <th>Department & Position</th>
                 <th>Status</th>
                 <th className="pe-4 text-end">Actions</th>
@@ -264,7 +257,7 @@ export default function Employees() {
                   <td colSpan={5} className="text-center py-5">
                     <div className="text-muted mb-2"><i className="bi bi-inbox fs-1"></i></div>
                     <div className="fw-bold">No results found</div>
-                    <div className="small opacity-75">Try adjusting filters or search query</div>
+                    <div className="small opacity-75">Try adjusting your search or filters</div>
                   </td>
                 </tr>
               ) : (
@@ -295,20 +288,19 @@ export default function Employees() {
                     <td className="pe-4 text-end">
                       <div className="d-flex gap-2 justify-content-end">
                         <Link to={`/employees/${emp.EmployeeID}`} className="btn-icon" data-tooltip="View Details">
-                          <i className="bi bi-eye text-primary"></i>
+                          <i className="bi bi-eye"></i>
                         </Link>
                         {canEdit && (
                           <>
-                            <Link to={`/employees/${emp.EmployeeID}`} className="btn-icon" data-tooltip="Edit">
-                              <i className="bi bi-pencil text-warning"></i>
+                            <Link to={`/employees/${emp.EmployeeID}`} className="btn-icon" data-tooltip="Edit Information">
+                              <i className="bi bi-pencil"></i>
                             </Link>
                             {canDelete && (
                               <button
                                 className="btn-icon text-danger"
                                 onClick={() => setDeleteTarget({ id: emp.EmployeeID, name: emp.FullName })}
-                                data-tooltip="Deactivate"
                               >
-                                <i className="bi bi-trash3 text-danger"></i>
+                                <i className="bi bi-trash3"></i>
                               </button>
                             )}
                           </>

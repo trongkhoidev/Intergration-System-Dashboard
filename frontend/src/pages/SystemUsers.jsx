@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { API_BASE, fetchAuth } from '../api';
-import Skeleton, { TableSkeleton } from '../components/Skeleton';
+import { TableSkeleton } from '../components/Skeleton';
 
 export default function SystemUsers() {
   const [users, setUsers] = useState([]);

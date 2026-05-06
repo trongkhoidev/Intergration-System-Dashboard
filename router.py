@@ -21,6 +21,49 @@ WORKING_DAYS_PER_MONTH = 22
 router = Blueprint("router", __name__)
 
 
+# DEBUG: Kiểm tra MySQL config trên Railway (xóa sau khi debug xong)
+@router.route("/api/debug/mysql")
+def debug_mysql():
+    import os, mysql.connector
+    host = os.environ.get('MYSQL_HOST', 'NOT_SET')
+    port = os.environ.get('MYSQL_PORT', 'NOT_SET')
+    user = os.environ.get('MYSQL_USER', 'NOT_SET')
+    database = os.environ.get('MYSQL_DATABASE', 'NOT_SET')
+    password_set = bool(os.environ.get('MYSQL_PASSWORD'))
+    
+    # Thu test ket noi
+    conn_status = "unknown"
+    conn_error = ""
+    try:
+        conn = mysql.connector.connect(
+            host=host,
+            port=int(port) if port != 'NOT_SET' else 3306,
+            user=user,
+            password=os.environ.get('MYSQL_PASSWORD', ''),
+            database=database,
+            connect_timeout=5,
+        )
+        cur = conn.cursor()
+        cur.execute("SHOW TABLES")
+        tables = [r[0] for r in cur.fetchall()]
+        conn.close()
+        conn_status = "connected"
+    except Exception as e:
+        conn_status = "failed"
+        conn_error = str(e)
+    
+    return jsonify({
+        "MYSQL_HOST": host,
+        "MYSQL_PORT": port,
+        "MYSQL_USER": user,
+        "MYSQL_DATABASE": database,
+        "MYSQL_PASSWORD_SET": password_set,
+        "connection_status": conn_status,
+        "connection_error": conn_error,
+        "tables": tables if conn_status == "connected" else []
+    })
+
+
 # Helper: log audit trail
 def log_audit(action, username="system", details=""):
     try:
@@ -116,8 +159,10 @@ def login():
             return jsonify({"status": "error", "msg": msg}), 401
 
     except Exception as e:
-        print(f"Error in login: {e}")
-        return jsonify({"status": "error", "msg": "Lỗi máy chủ xác thực"}), 500
+        import traceback
+        traceback.print_exc()
+        print(f"[LOGIN ERROR DETAIL] SQL_SERVER={os.environ.get('SQL_SERVER')} AUTH_DB={os.environ.get('SQL_AUTH_DATABASE')} Error={e}")
+        return jsonify({"status": "error", "msg": "Lỗi máy chủ xác thực", "debug": str(e)}), 500
 
 # ============================================================
 # NEW API: PAYROLL DATA
@@ -129,21 +174,32 @@ def get_payroll():
         my = get_mysql_connection()
         cur = my.cursor(dictionary=True)
         month = request.args.get('month')
-        
+        dept = request.args.get('dept')
+
         query = """
-            SELECT DATE_FORMAT(s.SalaryMonth, '%M %Y') AS MonthYear, e.FullName, s.BaseSalary, s.Bonus, s.Deductions, s.NetSalary AS TotalSalary
+            SELECT s.SalaryID, DATE_FORMAT(s.SalaryMonth, '%M %Y') AS MonthYear,
+                   e.FullName, dp.DepartmentName,
+                   s.BaseSalary, s.Bonus, s.Deductions, s.NetSalary AS TotalSalary
             FROM salaries s
             JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll dp ON e.DepartmentID = dp.DepartmentID
         """
-        
+
+        conditions = []
+        params = []
+
         if month and month != 'All Months':
-            query += " WHERE DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s"
-            query += " ORDER BY s.SalaryMonth DESC"
-            cur.execute(query, (month,))
-        else:
-            query += " ORDER BY s.SalaryMonth DESC"
-            cur.execute(query)
-            
+            conditions.append("DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s")
+            params.append(month)
+        if dept:
+            conditions.append("dp.DepartmentName = %s")
+            params.append(dept)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY s.SalaryMonth DESC"
+
+        cur.execute(query, params)
         return jsonify(cur.fetchall())
     except Exception as e:
         print(f"Error in get_payroll: {e}")
@@ -199,28 +255,42 @@ def get_payroll_summary():
         my = get_mysql_connection()
         cur = my.cursor(dictionary=True)
         month = request.args.get('month')
-        
+        dept = request.args.get('dept')
+
         # Summary
-        base_query = "SELECT SUM(NetSalary) as TotalPayroll, AVG(NetSalary) as AvgSalary FROM salaries"
-        if month and month != 'All Months':
-            cur.execute(base_query + " WHERE DATE_FORMAT(SalaryMonth, '%M %Y') = %s", (month,))
-        else:
-            cur.execute(base_query)
-        summary = cur.fetchone()
-        
-        # Breakdown by department
-        breakdown_query = """
-            SELECT DepartmentID, SUM(NetSalary) as Amount 
-            FROM salaries s JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID 
+        conditions = []
+        params = []
+        base_query = """
+            SELECT SUM(s.NetSalary) as TotalPayroll, AVG(s.NetSalary) as AvgSalary
+            FROM salaries s
+            JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll dp ON e.DepartmentID = dp.DepartmentID
         """
         if month and month != 'All Months':
-            breakdown_query += " WHERE DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s"
-            breakdown_query += " GROUP BY DepartmentID"
-            cur.execute(breakdown_query, (month,))
-        else:
-            breakdown_query += " GROUP BY DepartmentID"
-            cur.execute(breakdown_query)
-            
+            conditions.append("DATE_FORMAT(s.SalaryMonth, '%M %Y') = %s")
+            params.append(month)
+        if dept:
+            conditions.append("dp.DepartmentName = %s")
+            params.append(dept)
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+        cur.execute(base_query, params)
+        summary = cur.fetchone()
+
+        # Breakdown by department
+        breakdown_conditions = list(conditions)
+        breakdown_params = list(params)
+        breakdown_query = """
+            SELECT dp.DepartmentID, dp.DepartmentName, SUM(s.NetSalary) as Amount
+            FROM salaries s
+            JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll dp ON e.DepartmentID = dp.DepartmentID
+        """
+        if breakdown_conditions:
+            breakdown_query += " WHERE " + " AND ".join(breakdown_conditions)
+        breakdown_query += " GROUP BY dp.DepartmentID, dp.DepartmentName"
+        cur.execute(breakdown_query, breakdown_params)
+
         summary['Breakdown'] = cur.fetchall()
         return jsonify(summary)
     except Exception as e:
@@ -253,13 +323,16 @@ def get_attendance():
         month = request.args.get('month')
         
         query = """
-            SELECT e.FullName, e.Status, SUM(a.WorkDays) as WorkDays, SUM(a.LeaveDays) as LeaveDays, SUM(a.AbsentDays) as AbsentDays
-            FROM attendance a
-            JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
+            SELECT e.FullName, e.Status, 
+                   COALESCE(SUM(a.WorkDays), 0) as WorkDays, 
+                   COALESCE(SUM(a.LeaveDays), 0) as LeaveDays, 
+                   COALESCE(SUM(a.AbsentDays), 0) as AbsentDays
+            FROM employees_payroll e
+            LEFT JOIN attendance a ON e.EmployeeID = a.EmployeeID
         """
         
         if month and month != 'All Months':
-            query += " WHERE DATE_FORMAT(a.AttendanceMonth, '%M %Y') = %s"
+            query += " WHERE DATE_FORMAT(a.AttendanceMonth, '%M %Y') = %s OR a.AttendanceMonth IS NULL"
             query += " GROUP BY e.EmployeeID, e.FullName, e.Status"
             cur.execute(query, (month,))
         else:
@@ -875,14 +948,12 @@ def add_employee():
     my = None
     try:
         sql = get_sqlserver_connection()
+        sql.autocommit = False
         cur = sql.cursor()
         cur.execute("SELECT COUNT(*) FROM Employees WHERE Email = ?", (email,))
         if cur.fetchone()[0] > 0:
+            sql.rollback()
             return jsonify({"status": "error", "msg": "Email đã tồn tại"}), 400
-
-        my = get_mysql_connection()
-        sql.autocommit = False
-        my.start_transaction()
 
         cur.execute("""
             INSERT INTO Employees
@@ -894,26 +965,34 @@ def add_employee():
 
         row = cur.fetchone()
         new_id = int(row[0])
-
-        my_cur = my.cursor()
-        my_cur.execute("""
-            INSERT INTO employees_payroll
-            (EmployeeID, FullName, DepartmentID, PositionID, Status)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (new_id, full_name, dept_id, pos_id, status))
-
         sql.commit()
-        my.commit()
+
+        # Sync to MySQL - optional, log warning if fails
+        try:
+            my = get_mysql_connection()
+            my_cur = my.cursor()
+            my_cur.execute("""
+                INSERT INTO employees_payroll
+                (EmployeeID, FullName, DepartmentID, PositionID, Status)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (new_id, full_name, dept_id, pos_id, status))
+            my.commit()
+        except Exception as mysql_err:
+            print(f"[WARN] MySQL sync failed for new employee {new_id}: {mysql_err}")
 
         return jsonify({
             "status": "success",
             "msg": f"Thêm nhân viên thành công (ID = {new_id})"
         })
     except Exception as e:
-        if sql: sql.rollback()
-        if my: my.rollback()
-        print(f"Error in add_employee: {e}")
-        return jsonify({"status": "error", "msg": "Failed to add employee"}), 500
+        if sql:
+            try: sql.rollback()
+            except: pass
+        import traceback
+        err_detail = traceback.format_exc()
+        print(f"[ERROR] add_employee: {e}")
+        print(err_detail)
+        return jsonify({"status": "error", "msg": "Failed to add employee", "debug": str(e)}), 500
 
 # ============================================================
 # API: CẬP NHẬT NHÂN VIÊN (PUT)
@@ -939,10 +1018,7 @@ def update_employee(emp_id):
     my = None
     try:
         sql = get_sqlserver_connection()
-        my = get_mysql_connection()
         sql.autocommit = False
-        my.start_transaction()
-
         cur = sql.cursor()
         cur.execute("""
             UPDATE Employees
@@ -950,23 +1026,30 @@ def update_employee(emp_id):
                 Email=?, HireDate=?, DepartmentID=?, PositionID=?, Status=?
             WHERE EmployeeID=?
         """, (full_name, dob, gender, phone, email, hire_date, dept_id, pos_id, status, emp_id))
-
-        my_cur = my.cursor()
-        my_cur.execute("""
-            UPDATE employees_payroll
-            SET FullName=%s, DepartmentID=%s, PositionID=%s, Status=%s
-            WHERE EmployeeID=%s
-        """, (full_name, dept_id, pos_id, status, emp_id))
-
         sql.commit()
-        my.commit()
+
+        # Sync to MySQL - optional, do not crash if fails
+        try:
+            my = get_mysql_connection()
+            my_cur = my.cursor()
+            my_cur.execute("""
+                UPDATE employees_payroll
+                SET FullName=%s, DepartmentID=%s, PositionID=%s, Status=%s
+                WHERE EmployeeID=%s
+            """, (full_name, dept_id, pos_id, status, emp_id))
+            my.commit()
+        except Exception as mysql_err:
+            print(f"[WARN] MySQL sync failed for update_employee {emp_id}: {mysql_err}")
 
         return jsonify({"status": "success", "msg": "Update thành công"})
     except Exception as e:
-        if sql: sql.rollback()
-        if my: my.rollback()
-        print(f"Error in update_employee: {e}")
-        return jsonify({"status": "error", "msg": "Failed to update employee"}), 500
+        if sql:
+            try: sql.rollback()
+            except: pass
+        import traceback
+        print(f"[ERROR] update_employee {emp_id}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"status": "error", "msg": "Failed to update employee", "debug": str(e)}), 500
 
 # ============================================================
 # API: XÓA NHÂN VIÊN (DELETE) – BR-05: Soft Delete Only
@@ -978,52 +1061,43 @@ def delete_employee(emp_id):
     my = None
     try:
         sql = get_sqlserver_connection()
-        my = get_mysql_connection()
-        
-        # Thiết lập transaction ngay từ đầu để tránh lỗi PyODBC
         sql.autocommit = False
-        my.start_transaction()
-
-        # Validation: check if Dividends exist
         cur = sql.cursor()
+
+        # Validation: check if Dividends exist (SQL Server)
         cur.execute("SELECT COUNT(*) FROM Dividends WHERE EmployeeID = ?", (emp_id,))
         if cur.fetchone()[0] > 0:
             sql.rollback()
-            my.rollback()
-            sql.close()
-            my.close()
-            return jsonify({"status": "error", "msg": "Không thể vô hiệu hoá: Nhân viên có dữ liệu cổ tức"}), 409
+            return jsonify({"status": "error", "msg": "Khong the vo hieu hoa: Nhan vien co du lieu co tuc"}), 409
 
-        # Validation: check if Salaries exist
-        my_cur = my.cursor()
-        my_cur.execute("SELECT COUNT(*) FROM salaries WHERE EmployeeID = %s", (emp_id,))
-        if my_cur.fetchone()[0] > 0:
-            sql.rollback()
-            my.rollback()
-            sql.close()
-            my.close()
-            return jsonify({"status": "error", "msg": "Không thể vô hiệu hoá: Nhân viên có dữ liệu lương"}), 409
-
-        # BR-05: Soft delete – chỉ đặt Status = Inactive, không xóa dòng
+        # BR-05: Soft delete
         cur.execute("UPDATE Employees SET Status = 'Inactive' WHERE EmployeeID = ?", (emp_id,))
-        my_cur.execute("UPDATE employees_payroll SET Status = 'Inactive' WHERE EmployeeID = %s", (emp_id,))
-
         sql.commit()
-        my.commit()
+
+        # Sync to MySQL - optional
+        try:
+            my = get_mysql_connection()
+            my_cur = my.cursor()
+            # Check salaries in MySQL (informational only)
+            my_cur.execute("SELECT COUNT(*) FROM salaries WHERE EmployeeID = %s", (emp_id,))
+            if my_cur.fetchone()[0] > 0:
+                print(f"[INFO] Employee {emp_id} has salary records in MySQL")
+            my_cur.execute("UPDATE employees_payroll SET Status = 'Inactive' WHERE EmployeeID = %s", (emp_id,))
+            my.commit()
+        except Exception as mysql_err:
+            print(f"[WARN] MySQL sync failed for delete_employee {emp_id}: {mysql_err}")
 
         username = request.current_user.get('username', 'system')
         log_audit("EMPLOYEE_DEACTIVATED", username, f"Employee {emp_id} set to Inactive (BR-05 soft delete)")
-
-        return jsonify({"status": "success", "msg": "Nhân viên đã được vô hiệu hoá thành công"})
+        return jsonify({"status": "success", "msg": "Nhan vien da duoc vo hieu hoa thanh cong"})
     except Exception as e:
         if sql:
             try: sql.rollback()
             except: pass
-        if my:
-            try: my.rollback()
-            except: pass
-        print(f"Error in delete_employee: {e}")
-        return jsonify({"status": "error", "msg": "Lỗi vô hiệu hoá nhân viên"}), 500
+        import traceback
+        print(f"[ERROR] delete_employee {emp_id}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"status": "error", "msg": "Loi vo hieu hoa nhan vien", "debug": str(e)}), 500
 
 # ============================================================
 # NEW API: DIVIDENDS DATA

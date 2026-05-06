@@ -1,12 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import StatCard from '../components/StatCard';
-import ChartCard from '../components/ChartCard';
 import ExportModal from '../components/ExportModal';
 import PayslipModal from '../components/PayslipModal';
-import Skeleton, { TableSkeleton } from '../components/Skeleton';
-import EmptyState from '../components/EmptyState';
 import { API_BASE, fetchAuth } from '../api';
 import { generateMonthOptions } from '../utils/dateUtils';
 
@@ -25,7 +21,7 @@ export default function Payroll() {
 
   const months = ['All Months', ...generateMonthOptions(12)];
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setLoading(true);
     const monthQuery = selectedMonth !== 'All Months' ? `month=${encodeURIComponent(selectedMonth)}` : '';
     const deptQuery = selectedDept ? `dept=${encodeURIComponent(selectedDept)}` : '';
@@ -45,11 +41,11 @@ export default function Payroll() {
       console.error(err);
       setLoading(false);
     });
-  };
+  }, [selectedMonth, selectedDept]);
 
   useEffect(() => {
     loadData();
-  }, [selectedMonth, selectedDept]);
+  }, [loadData]);
 
   const filteredData = payrollData.filter(p => 
     p.FullName?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -101,14 +97,24 @@ export default function Payroll() {
         <div className="col-lg-3">
           <div className="stat-card">
             <div className="stat-card-label">Total Distribution</div>
-            <div className="stat-card-value text-primary">${summary.TotalPayroll?.toLocaleString() || 0}</div>
+            <div
+              className="stat-card-value text-primary"
+              style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', wordBreak: 'break-all', lineHeight: 1.2 }}
+            >
+              ${summary.TotalPayroll ? Number(summary.TotalPayroll).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}
+            </div>
             <div className="small text-muted mt-1"><i className="bi bi-arrow-up text-success me-1"></i>+2.5% from last month</div>
           </div>
         </div>
         <div className="col-lg-3">
           <div className="stat-card">
             <div className="stat-card-label">Average Salary</div>
-            <div className="stat-card-value text-success">${summary.AvgSalary?.toLocaleString() || 0}</div>
+            <div
+              className="stat-card-value text-success"
+              style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', wordBreak: 'break-all', lineHeight: 1.2 }}
+            >
+              ${summary.AvgSalary ? Number(summary.AvgSalary).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}
+            </div>
             <div className="small text-muted mt-1">Based on {payrollData.length} records</div>
           </div>
         </div>
@@ -179,7 +185,7 @@ export default function Payroll() {
                   <tr key={i}>
                     <td className="ps-4">
                       <div className="fw-bold text-dark">{p.FullName}</div>
-                      <div className="small text-muted">{p.MonthYear}</div>
+                      <div className="small text-muted">{p.MonthYear} {p.DepartmentName ? `• ${p.DepartmentName}` : ''}</div>
                     </td>
                     <td><span className="fw-600 text-dark">${p.BaseSalary?.toLocaleString()}</span></td>
                     <td><span className="text-success fw-600">+$ {p.Bonus?.toLocaleString()}</span></td>

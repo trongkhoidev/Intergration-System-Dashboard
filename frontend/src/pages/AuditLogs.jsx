@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { API_BASE, fetchAuth } from '../api';
-import Skeleton, { TableSkeleton } from '../components/Skeleton';
+import { TableSkeleton } from '../components/Skeleton';
 import ExportModal from '../components/ExportModal';
 
 export default function AuditLogs() {

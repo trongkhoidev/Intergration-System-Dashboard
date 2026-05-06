@@ -11,10 +11,16 @@ export default function Login() {
 
     useEffect(() => {
         if (error) {
+            setTimeout(() => setError(""), 5000);
+        }
+    }, [error]);
+
+    useEffect(() => {
+        if (error) {
             setError('');
             setShake(false);
         }
-    }, [email, password]);
+    }, [email, password, error]);
 
     const handleLogin = (e) => {
         e.preventDefault();

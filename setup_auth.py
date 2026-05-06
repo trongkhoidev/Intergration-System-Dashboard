@@ -100,7 +100,10 @@ def setup_auth():
         main_db = os.environ.get('SQL_DATABASE', 'HUMAN_2025')
 
         print(f"Creating database {auth_db} if not exists...")
-        cur.execute(f"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{auth_db}') CREATE DATABASE {auth_db}")
+        try:
+            cur.execute(f"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{auth_db}') CREATE DATABASE {auth_db}")
+        except Exception as e:
+            print(f"Skipping DB creation (likely on Somee): {e}")
 
         conn.close()
         conn_str_auth = conn_str + f"DATABASE={auth_db};"
@@ -236,7 +239,11 @@ def setup_auth():
                 (username, email, hashed, role, emp_id),
             )
             synced_count += 1
-            print(f"  [+] {full_name} ({email}) -> Role: {role} | Dept: {dept_name} | Pos: {pos_name} | Username: {username}".encode('utf-8', errors='replace').decode('utf-8', errors='replace'))
+            # In ra log đơn giản hơn để tránh lỗi Unicode terminal
+            try:
+                print(f"  [+] Synced: {username} ({role})")
+            except:
+                pass
 
         conn_main.close()
 
