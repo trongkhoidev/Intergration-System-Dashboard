@@ -71,11 +71,11 @@ export default function SystemUsers() {
   };
 
   return (
-    <div className="pb-5">
-      <div className="d-flex justify-content-between align-items-center mb-5 animate-slide-up">
+    <div className="pb-5 animate-fade-in">
+      <div className="page-header mb-5">
         <div>
-          <h2 className="fw-bold text-dark mb-1 tracking-tight">System Users</h2>
-          <p className="text-muted small mb-0">Manage access control, roles, and identities.</p>
+          <h1 className="page-title text-white">System Users</h1>
+          <p className="page-subtitle text-white-50">Manage access control, roles, and identities.</p>
         </div>
         <button className="btn btn-primary px-4 shadow-sm fw-bold" onClick={() => handleOpenModal()}>
             <i className="bi bi-person-plus-fill me-2"></i> Add Identity

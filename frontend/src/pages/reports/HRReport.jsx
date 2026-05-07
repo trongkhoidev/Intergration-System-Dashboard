@@ -66,10 +66,20 @@ export default function HRReport({ setExportFunctions }) {
     XLSX.writeFile(wb, "hr_report.xlsx");
   }, [filteredData]);
 
+  // Helper to remove Vietnamese diacritics for PDF export
+  const removeDiacritics = (str) => {
+    if (!str) return '';
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
   const exportPDF = useCallback(() => {
     const exportRows = filteredData.map((row) => [
-      row.Department,
-      row.NormalizedStatus,
+      removeDiacritics(row.Department),
+      removeDiacritics(row.NormalizedStatus),
       row.Count,
     ]);
 
@@ -79,8 +89,8 @@ export default function HRReport({ setExportFunctions }) {
     doc.text("HR Report", 14, 15);
 
     doc.setFontSize(10);
-    doc.text(`Department: ${selectedDept || 'All Departments'}`, 14, 23);
-    doc.text(`Status: ${selectedStatus || 'All Statuses'}`, 14, 29);
+    doc.text(`Department: ${removeDiacritics(selectedDept) || 'All Departments'}`, 14, 23);
+    doc.text(`Status: ${removeDiacritics(selectedStatus) || 'All Statuses'}`, 14, 29);
 
     autoTable(doc, {
       head: [['Department', 'Status', 'Count']],
@@ -128,7 +138,7 @@ export default function HRReport({ setExportFunctions }) {
   const STATUS_COLORS = {
     Active: '#10b981',
     'On Leave': '#f59e0b',
-    Probation: '#3b82f6',
+    Probation: '#ec4899',
     Inactive: '#ef4444',
   };
 
@@ -176,23 +186,44 @@ export default function HRReport({ setExportFunctions }) {
       </div>
 
       {/* KPIs */}
-      <div className="row g-3 mb-4">
+      <div className="row g-4 mb-4">
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2">Total Employees</h6>
-            <h3 className="mb-0 fw-bold">{totalEmployees}</h3>
+          <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.1s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Total Employees</div>
+                <div className="stat-card-value">{totalEmployees}</div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-people"></i>
+              </div>
+            </div>
           </div>
         </div>
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2 text-success">Active</h6>
-            <h3 className="mb-0 fw-bold text-success">{activeEmployees}</h3>
+          <div className="stat-card stat-card-vivid stat-card-green animate-in" style={{ animationDelay: '0.2s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Active</div>
+                <div className="stat-card-value">{activeEmployees}</div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-person-check"></i>
+              </div>
+            </div>
           </div>
         </div>
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2 text-danger">Inactive</h6>
-            <h3 className="mb-0 fw-bold text-danger">{inactiveEmployees}</h3>
+          <div className="stat-card stat-card-vivid stat-card-amber animate-in" style={{ animationDelay: '0.3s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Inactive</div>
+                <div className="stat-card-value">{inactiveEmployees}</div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-person-x"></i>
+              </div>
+            </div>
           </div>
         </div>
       </div>

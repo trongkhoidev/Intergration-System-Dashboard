@@ -19,5 +19,6 @@ def index():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))  # 🔥 QUAN TRỌNG
-    app.run(host="0.0.0.0", port=port)       # 🔥 QUAN TRỌNG
+    port = int(os.environ.get("PORT", 5001))
+    # Bật debug=True để tự động reload khi sửa code
+    app.run(host="0.0.0.0", port=port, debug=True)

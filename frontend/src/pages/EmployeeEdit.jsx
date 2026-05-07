@@ -179,9 +179,9 @@ export default function EmployeeEdit() {
               <div className="col-md-4">
                 <label className="form-label stat-label small text-uppercase">Gender Identification</label>
                 <select id="Gender" className="form-select form-control-custom" value={form.Gender} onChange={handleChange} required>
-                  <option value="Nam">Masculine</option>
-                  <option value="Nữ">Feminine</option>
-                  <option value="Khác">Other/Diverse</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
 

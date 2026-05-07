@@ -43,7 +43,7 @@ export default function Attendance() {
       {
         label: 'Leave Days',
         data: filteredData.slice(0, 10).map(a => a.LeaveDays || 0),
-        backgroundColor: '#f59e0b',
+        backgroundColor: '#ec4899',
         borderRadius: 4
       },
       {
@@ -76,36 +76,58 @@ export default function Attendance() {
           <p className="page-subtitle">Track workforce presence and availability trends</p>
         </div>
         <div className="d-flex gap-2">
-          <button className="btn btn-outline"><i className="bi bi-file-earmark-spreadsheet me-2"></i> Report</button>
-          <button className="btn btn-primary shadow-sm"><i className="bi bi-calendar-check me-2"></i> Monthly Review</button>
+          {/* Action buttons removed per user request */}
         </div>
       </div>
 
       <div className="row g-4 mb-4">
         <div className="col-lg-8">
-          <div className="card border-0 shadow-sm">
-            <h5 className="fw-bold mb-4"><i className="bi bi-bar-chart-steps text-primary me-2"></i>Attendance Breakdown</h5>
+          <div className="card border-0 shadow-sm h-100 p-4">
+            <h5 className="fw-800 mb-4"><i className="bi bi-bar-chart-steps text-primary me-2"></i>Attendance Breakdown</h5>
             <div style={{ height: '320px' }}>
               {loading ? <div className="skeleton h-100"></div> : <Bar data={barData} options={chartOptions} />}
             </div>
           </div>
         </div>
         <div className="col-lg-4">
-          <div className="d-grid gap-3">
-            <div className="stat-card">
-              <div className="stat-card-label">Global Presence</div>
-              <div className="stat-card-value text-primary">94.8%</div>
-              <div className="small text-muted mt-1"><i className="bi bi-caret-up-fill text-success me-1"></i>0.5% vs last month</div>
+          <div className="d-grid gap-3 h-100">
+            <div className="stat-card stat-card-vivid stat-card-blue animate-in" style={{ animationDelay: '0.1s' }}>
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <div className="stat-card-label">Global Presence</div>
+                  <div className="stat-card-value">94.8%</div>
+                </div>
+                <div className="stat-card-icon">
+                  <i className="bi bi-person-check-fill"></i>
+                </div>
+              </div>
+              <div className="small text-muted mt-2"><i className="bi bi-caret-up-fill text-success me-1"></i>0.5% vs last month</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-card-label">On Leave Today</div>
-              <div className="stat-card-value text-warning">12 Staff</div>
-              <div className="small text-muted mt-1">Scheduled absences</div>
+            
+            <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.2s' }}>
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <div className="stat-card-label">On Leave Today</div>
+                  <div className="stat-card-value">12 <span className="small opacity-50">Staff</span></div>
+                </div>
+                <div className="stat-card-icon">
+                  <i className="bi bi-calendar-x"></i>
+                </div>
+              </div>
+              <div className="small text-muted mt-2">Scheduled absences</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-card-label">Avg. Work Days</div>
-              <div className="stat-card-value text-success">21.2</div>
-              <div className="small text-muted mt-1">Per month per employee</div>
+
+            <div className="stat-card stat-card-vivid stat-card-green animate-in" style={{ animationDelay: '0.3s' }}>
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <div className="stat-card-label">Avg. Work Days</div>
+                  <div className="stat-card-value">21.2 <span className="small opacity-50">Days</span></div>
+                </div>
+                <div className="stat-card-icon">
+                  <i className="bi bi-calendar3-week"></i>
+                </div>
+              </div>
+              <div className="small text-muted mt-2">Per month per employee</div>
             </div>
           </div>
         </div>

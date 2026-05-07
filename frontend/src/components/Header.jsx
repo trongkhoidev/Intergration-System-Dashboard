@@ -109,12 +109,13 @@ export default function Header() {
         </div>
 
         {/* User info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, borderLeft: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 12 }}>
           <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: 'var(--primary-light)', color: 'var(--primary)',
+            width: 38, height: 38, borderRadius: '12px',
+            background: 'var(--primary-gradient)', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: '0.875rem'
+            fontWeight: 800, fontSize: '0.9rem',
+            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
           }}>{displayName.charAt(0).toUpperCase()}</div>
           <div style={{ lineHeight: 1.2 }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-dark)' }}>{displayName}</div>

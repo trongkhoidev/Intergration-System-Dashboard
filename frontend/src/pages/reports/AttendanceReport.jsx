@@ -78,9 +78,19 @@ export default function AttendanceReport({ setExportFunctions }) {
     XLSX.writeFile(wb, 'attendance_report.xlsx');
   }, [normalizedData]);
 
+  // Helper to remove Vietnamese diacritics for PDF export (jsPDF default fonts don't support Unicode)
+  const removeDiacritics = (str) => {
+    if (!str) return '';
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
   const exportPDF = useCallback(() => {
     const exportRows = normalizedData.map((row) => [
-      row.FullName,
+      removeDiacritics(row.FullName),
       row.TotalWork,
       row.TotalLeave,
       row.TotalAbsent,
@@ -90,6 +100,9 @@ export default function AttendanceReport({ setExportFunctions }) {
 
     doc.setFontSize(16);
     doc.text('Attendance Report', 14, 15);
+
+    doc.setFontSize(10);
+    doc.text('Note: Names normalized for PDF compatibility', 14, 21);
 
     autoTable(doc, {
       head: [['Employee', 'Work Days', 'Leave Days', 'Absent Days']],
@@ -150,25 +163,49 @@ export default function AttendanceReport({ setExportFunctions }) {
   return (
     <div className="attendance-report">
       {/* KPIs */}
-      <div className="row g-3 mb-4">
+      <div className="row g-4 mb-4">
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2">Total Work Days</h6>
-            <h3 className="mb-0 fw-bold text-primary">{totalWork}</h3>
+          <div className="stat-card stat-card-vivid stat-card-blue animate-in" style={{ animationDelay: '0.1s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Total Work Days</div>
+                <div className="stat-card-value">{totalWork}</div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-calendar-check-fill"></i>
+              </div>
+            </div>
+            <div className="small text-muted mt-2">Cumulative workforce effort</div>
           </div>
         </div>
 
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2 text-warning">Total Leave Days</h6>
-            <h3 className="mb-0 fw-bold text-warning">{totalLeave}</h3>
+          <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.2s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Total Leave Days</div>
+                <div className="stat-card-value">{totalLeave}</div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-calendar-minus"></i>
+              </div>
+            </div>
+            <div className="small text-muted mt-2">Authorized absences</div>
           </div>
         </div>
 
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2 text-danger">Total Absent Days</h6>
-            <h3 className="mb-0 fw-bold text-danger">{totalAbsent}</h3>
+          <div className="stat-card stat-card-vivid stat-card-amber animate-in" style={{ animationDelay: '0.3s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Total Absent Days</div>
+                <div className="stat-card-value">{totalAbsent}</div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-calendar-x-fill"></i>
+              </div>
+            </div>
+            <div className="small text-muted mt-2">Unplanned unavailability</div>
           </div>
         </div>
       </div>
@@ -226,7 +263,7 @@ export default function AttendanceReport({ setExportFunctions }) {
                         {
                           label: 'Leave Days',
                           data: leaveData,
-                          backgroundColor: '#f59e0b',
+                          backgroundColor: '#ec4899',
                         },
                         {
                           label: 'Absent Days',

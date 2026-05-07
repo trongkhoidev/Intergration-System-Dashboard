@@ -1,7 +1,7 @@
 const STATUS_STYLES = [
   { match: ["active", "đang làm việc", "working"], className: "badge-active", label: "Active" },
   { match: ["on leave", "leave", "nghỉ phép"], className: "badge-leave", label: "On Leave" },
-  { match: ["probation", "thử việc", "trial", "thực tập"], className: "badge-probation", label: "Probation" },
+  { match: ["probation", "thử việc", "trial", "thực tập"], className: "badge-pink", label: "Probation" },
   { match: ["inactive", "terminated", "resigned", "nghỉ việc"], className: "badge-danger", label: "Inactive" },
 ];
 

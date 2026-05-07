@@ -21,12 +21,21 @@ export default function AuditLogs() {
       });
   }, []);
 
+  const getActionBadgeClass = (action) => {
+    const act = action?.toUpperCase() || '';
+    if (act.includes('CREATE') || act.includes('ADD') || act.includes('INSERT')) return 'bg-vivid-green text-white';
+    if (act.includes('DELETE') || act.includes('REMOVE')) return 'bg-vivid-red text-white';
+    if (act.includes('UPDATE') || act.includes('EDIT') || act.includes('MODIFY')) return 'bg-vivid-blue text-white';
+    if (act.includes('LOGIN') || act.includes('LOGOUT')) return 'bg-vivid-amber text-dark';
+    return 'bg-light text-dark border';
+  };
+
   return (
-    <div className="pb-5">
-      <div className="d-flex justify-content-between align-items-center mb-5 animate-slide-up">
+    <div className="pb-5 animate-fade-in">
+      <div className="page-header mb-5">
         <div>
-          <h2 className="fw-bold text-dark mb-1 tracking-tight">System Audit Logs</h2>
-          <p className="text-muted small mb-0">Immutable record of system operations and security events.</p>
+          <h1 className="page-title text-white">System Audit Logs</h1>
+          <p className="page-subtitle text-white-50">Immutable record of system operations and security events.</p>
         </div>
         <button className="btn btn-outline-primary bg-white px-3 shadow-sm fw-bold d-flex align-items-center gap-2" onClick={() => setIsExportModalOpen(true)}>
             <i className="bi bi-shield-check"></i> Export Log Extract
@@ -53,7 +62,7 @@ export default function AuditLogs() {
                     <td className="small">{new Date(log.Timestamp).toLocaleString()}</td>
                     <td className="fw-bold text-dark">{log.Username}</td>
                     <td>
-                      <span className="badge bg-light text-dark border px-3 py-2 rounded-pill fw-bold" style={{ fontSize: '0.75rem' }}>
+                      <span className={`badge ${getActionBadgeClass(log.Action)} px-3 py-2 rounded-pill fw-700`} style={{ fontSize: '0.7rem', minWidth: '85px' }}>
                         {log.Action}
                       </span>
                     </td>

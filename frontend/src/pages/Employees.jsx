@@ -53,16 +53,18 @@ export default function Employees() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setCurrentPage(1); }, [search, filterDept, filterStatus]);
 
-  const filtered = employees.filter(e => {
-    const term = search.toLowerCase();
-    const matchSearch = !search ||
-      e.FullName?.toLowerCase().includes(term) ||
-      e.EmployeeID?.toString().includes(term) ||
-      e.Department?.toLowerCase().includes(term);
-    const matchDept = !filterDept || e.Department === filterDept;
-    const matchStatus = !filterStatus || getStatusPresentation(e.Status).label === filterStatus;
-    return matchSearch && matchDept && matchStatus;
-  });
+  const filtered = employees
+    .filter(e => {
+      const term = search.toLowerCase();
+      const matchSearch = !search ||
+        e.FullName?.toLowerCase().includes(term) ||
+        e.EmployeeID?.toString().includes(term) ||
+        e.Department?.toLowerCase().includes(term);
+      const matchDept = !filterDept || e.Department === filterDept;
+      const matchStatus = !filterStatus || getStatusPresentation(e.Status).label === filterStatus;
+      return matchSearch && matchDept && matchStatus;
+    })
+    .sort((a, b) => a.EmployeeID - b.EmployeeID);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
@@ -133,7 +135,7 @@ export default function Employees() {
           <p className="page-subtitle">Manage and monitor all staff members</p>
         </div>
         <div className="d-flex gap-2">
-           <button className="btn btn-outline" onClick={load}>
+          <button className="btn btn-outline" onClick={load}>
             <i className="bi bi-arrow-clockwise"></i>
           </button>
           {canEdit && (
@@ -147,52 +149,52 @@ export default function Employees() {
       {/* Stats Summary Area */}
       <div className="row g-4 mb-4">
         <div className="col-md-3">
-          <div className="stat-card">
+          <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.1s' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">Total Staff</div>
                 <div className="stat-card-value">{employees.length}</div>
               </div>
-              <div className="stat-card-icon bg-primary-light text-primary">
+              <div className="stat-card-icon">
                 <i className="bi bi-people-fill"></i>
               </div>
             </div>
           </div>
         </div>
         <div className="col-md-3">
-          <div className="stat-card">
+          <div className="stat-card stat-card-vivid stat-card-green animate-in" style={{ animationDelay: '0.2s' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">Active</div>
-                <div className="stat-card-value text-success">{employees.filter(e => getStatusPresentation(e.Status).label === 'Active').length}</div>
+                <div className="stat-card-value">{employees.filter(e => getStatusPresentation(e.Status).label === 'Active').length}</div>
               </div>
-              <div className="stat-card-icon bg-success-light text-success">
+              <div className="stat-card-icon">
                 <i className="bi bi-person-check-fill"></i>
               </div>
             </div>
           </div>
         </div>
         <div className="col-md-3">
-          <div className="stat-card">
+          <div className="stat-card stat-card-vivid stat-card-amber animate-in" style={{ animationDelay: '0.3s' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">On Leave</div>
-                <div className="stat-card-value text-warning">{employees.filter(e => getStatusPresentation(e.Status).label === 'On Leave').length}</div>
+                <div className="stat-card-value">{employees.filter(e => getStatusPresentation(e.Status).label === 'On Leave').length}</div>
               </div>
-              <div className="stat-card-icon bg-warning-light text-warning">
+              <div className="stat-card-icon">
                 <i className="bi bi-person-dash-fill"></i>
               </div>
             </div>
           </div>
         </div>
         <div className="col-md-3">
-          <div className="stat-card">
+          <div className="stat-card stat-card-vivid stat-card-blue animate-in" style={{ animationDelay: '0.4s' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <div className="stat-card-label">Departments</div>
-                <div className="stat-card-value text-info">{departments.length}</div>
+                <div className="stat-card-value">{departments.length}</div>
               </div>
-              <div className="stat-card-icon bg-info-light text-info">
+              <div className="stat-card-icon">
                 <i className="bi bi-building"></i>
               </div>
             </div>
@@ -265,19 +267,23 @@ export default function Employees() {
                   <tr key={emp.EmployeeID}>
                     <td className="ps-4">
                       <div className="d-flex align-items-center gap-3">
-                        <div className="avatar bg-primary-light text-primary fw-bold">
+                        <div className="avatar bg-primary-light text-primary fw-bold" style={{ width: 38, height: 38 }}>
                           {emp.FullName?.charAt(0)}
                         </div>
                         <div>
-                          <div className="fw-bold text-dark">#{emp.EmployeeID} - {emp.FullName}</div>
-                          <div className="small text-muted">{emp.Gender} • Joined {emp.HireDate ? new Date(emp.HireDate).toLocaleDateString() : 'N/A'}</div>
+                          <div className="fw-bold text-dark">{emp.FullName}</div>
+                          <div className="small text-muted d-flex align-items-center gap-2">
+                            <span className="emp-id">ID: {emp.EmployeeID}</span>
+                            <span>•</span>
+                            <span>{emp.Gender}</span>
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td>
                       <div className="small">
-                         <div className="text-dark"><i className="bi bi-envelope me-1"></i> {emp.Email}</div>
-                         <div className="text-muted"><i className="bi bi-phone me-1"></i> {emp.PhoneNumber || 'N/A'}</div>
+                        <div className="text-dark"><i className="bi bi-envelope me-1"></i> {emp.Email}</div>
+                        <div className="text-muted"><i className="bi bi-phone me-1"></i> {emp.PhoneNumber || 'N/A'}</div>
                       </div>
                     </td>
                     <td>
@@ -325,9 +331,9 @@ export default function Employees() {
                 <i className="bi bi-chevron-left"></i>
               </button>
               {[...Array(totalPages)].map((_, i) => (
-                <button 
-                  key={i} 
-                  className={`page-btn ${currentPage === i + 1 ? 'active' : ''}`} 
+                <button
+                  key={i}
+                  className={`page-btn ${currentPage === i + 1 ? 'active' : ''}`}
                   onClick={() => setCurrentPage(i + 1)}
                 >
                   {i + 1}

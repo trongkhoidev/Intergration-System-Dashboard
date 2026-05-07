@@ -7,19 +7,19 @@ const NAV_ITEMS = {
     {
       section: 'Main',
       items: [
-        { path: '/', label: 'Dashboard', icon: 'bi-grid-fill' },
-        { path: '/employees', label: 'Employees', icon: 'bi-people-fill' },
-        { path: '/payroll', label: 'Payroll', icon: 'bi-cash-coin' },
-        { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill' },
-        { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill' },
-        { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill' },
+        { path: '/', label: 'Dashboard', icon: 'bi-grid-fill', color: '#22d3ee' }, // Cyan
+        { path: '/employees', label: 'Employees', icon: 'bi-people-fill', color: '#818cf8' }, // Indigo
+        { path: '/payroll', label: 'Payroll', icon: 'bi-cash-coin', color: '#fbbf24' }, // Amber
+        { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill', color: '#34d399' }, // Emerald
+        { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill', color: '#a78bfa' }, // Violet
+        { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill', color: '#fb7185' }, // Rose
       ]
     },
     {
       section: 'Administration',
       items: [
-        { path: '/users', label: 'System Users', icon: 'bi-person-gear' },
-        { path: '/audit-logs', label: 'Audit Logs', icon: 'bi-shield-check' },
+        { path: '/users', label: 'System Users', icon: 'bi-person-gear', color: '#94a3b8' }, // Slate
+        { path: '/audit-logs', label: 'Audit Logs', icon: 'bi-shield-check', color: '#2dd4bf' }, // Teal
       ]
     }
   ],
@@ -27,11 +27,11 @@ const NAV_ITEMS = {
     {
       section: 'Main',
       items: [
-        { path: '/', label: 'Dashboard', icon: 'bi-grid-fill' },
-        { path: '/employees', label: 'Employees', icon: 'bi-people-fill' },
-        { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill' },
-        { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill' },
-        { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill' },
+        { path: '/', label: 'Dashboard', icon: 'bi-grid-fill', color: '#22d3ee' },
+        { path: '/employees', label: 'Employees', icon: 'bi-people-fill', color: '#818cf8' },
+        { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill', color: '#34d399' },
+        { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill', color: '#a78bfa' },
+        { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill', color: '#fb7185' },
       ]
     }
   ],
@@ -39,12 +39,12 @@ const NAV_ITEMS = {
     {
       section: 'Main',
       items: [
-        { path: '/', label: 'Dashboard', icon: 'bi-grid-fill' },
-        { path: '/employees', label: 'Employees', icon: 'bi-people-fill' },
-        { path: '/payroll', label: 'Payroll', icon: 'bi-cash-coin' },
-        { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill' },
-        { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill' },
-        { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill' },
+        { path: '/', label: 'Dashboard', icon: 'bi-grid-fill', color: '#22d3ee' },
+        { path: '/employees', label: 'Employees', icon: 'bi-people-fill', color: '#818cf8' },
+        { path: '/payroll', label: 'Payroll', icon: 'bi-cash-coin', color: '#fbbf24' },
+        { path: '/attendance', label: 'Attendance', icon: 'bi-calendar-check-fill', color: '#34d399' },
+        { path: '/reports', label: 'Reports', icon: 'bi-bar-chart-fill', color: '#a78bfa' },
+        { path: '/alerts', label: 'Alerts', icon: 'bi-bell-fill', color: '#fb7185' },
       ]
     }
   ],
@@ -52,9 +52,9 @@ const NAV_ITEMS = {
     {
       section: 'My Account',
       items: [
-        { path: '/profile', label: 'My Profile', icon: 'bi-person-circle' },
-        { path: '/my-payroll', label: 'My Payroll', icon: 'bi-cash-coin' },
-        { path: '/my-attendance', label: 'My Attendance', icon: 'bi-calendar-check-fill' },
+        { path: '/profile', label: 'My Profile', icon: 'bi-person-circle', color: '#38bdf8' }, // Sky
+        { path: '/my-payroll', label: 'My Payroll', icon: 'bi-cash-coin', color: '#fbbf24' },
+        { path: '/my-attendance', label: 'My Attendance', icon: 'bi-calendar-check-fill', color: '#34d399' },
       ]
     }
   ],
@@ -90,50 +90,110 @@ export default function Sidebar() {
   return (
     <div className="sidebar-area">
       {/* Logo */}
-      <div className="sidebar-logo">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="sidebar-logo" style={{ padding: '28px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: 36, height: 36, background: 'var(--sidebar-active-bg)',
-            borderRadius: '10px', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', flexShrink: 0
+            width: 42, height: 42,
+            background: 'var(--primary-gradient)',
+            borderRadius: '12px', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', flexShrink: 0,
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)'
           }}>
-            <i className="bi bi-intersect" style={{ color: '#fff', fontSize: '1rem' }}></i>
+            <i className="bi bi-intersect" style={{ color: '#fff', fontSize: '1.25rem' }}></i>
           </div>
           <div>
             <div className="sidebar-logo-text">System Integration</div>
-            <div className="sidebar-logo-sub">Project Dashboard</div>
+            <div className="sidebar-logo-sub" style={{ color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, fontSize: '0.65rem' }}>Enterprise System</div>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingTop: 8 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
         {navGroups.map((group) => (
-          <div key={group.section}>
-            <div className="sidebar-section-label">{group.section}</div>
-            {group.items.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`sidebar-nav-link ${isActive(item.path) ? 'active' : ''}`}
-              >
-                <i className={`bi ${item.icon}`}></i>
-                <span>{item.label}</span>
-              </Link>
-            ))}
+          <div key={group.section} style={{ marginBottom: '20px' }}>
+            <div className="sidebar-section-label" style={{ paddingLeft: '24px', opacity: 0.4 }}>{group.section}</div>
+            {group.items.map((item) => {
+              const active = isActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`sidebar-nav-link ${active ? 'active' : ''}`}
+                  style={{
+                    position: 'relative',
+                    margin: '2px 12px',
+                    padding: '10px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    borderRadius: '10px',
+                    backgroundColor: active ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                    color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}
+                >
+                  {/* Active Indicator Bar */}
+                  {active && (
+                    <div style={{
+                      position: 'absolute',
+                      left: '-12px',
+                      width: '4px',
+                      height: '20px',
+                      backgroundColor: '#3b82f6',
+                      borderRadius: '0 4px 4px 0',
+                      boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)'
+                    }}></div>
+                  )}
+
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: active ? 'rgba(255,255,255,0.05)' : 'transparent',
+                    color: item.color || '#fff',
+                    fontSize: '1.1rem'
+                  }}>
+                    <i className={`bi ${item.icon}`}></i>
+                  </div>
+                  <span style={{ fontWeight: active ? 600 : 500, fontSize: '0.9rem' }}>{item.label}</span>
+                </Link>
+              );
+            })}
           </div>
         ))}
       </div>
 
       {/* User Footer */}
-      <div className="sidebar-footer">
-        <Link to="/profile" className="sidebar-user-card" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 4 }}>
-          <div className="sidebar-avatar">{displayName.charAt(0).toUpperCase()}</div>
+      <div className="sidebar-footer" style={{
+        padding: '24px 16px',
+        marginTop: 'auto'
+      }}>
+        <Link to="/profile" className="sidebar-user-card" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          textDecoration: 'none',
+          marginBottom: 8,
+          padding: '8px',
+          borderRadius: '12px',
+          transition: 'all 0.2s'
+        }}>
+          <div className="sidebar-avatar" style={{
+            width: 40, height: 40,
+            background: 'var(--primary-gradient)',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+          }}>
+            {displayName.charAt(0).toUpperCase()}
+          </div>
           <div style={{ overflow: 'hidden', flex: 1 }}>
-            <div style={{ color: '#fff', fontSize: '0.8125rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ color: '#fff', fontSize: '0.875rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {displayName}
             </div>
-            <div style={{ color: 'var(--sidebar-text)', fontSize: '0.7rem', opacity: 0.7 }}>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', fontWeight: 500 }}>
               {ROLE_LABELS[role] || 'User'}
             </div>
           </div>
@@ -141,10 +201,20 @@ export default function Sidebar() {
         <button
           onClick={handleLogout}
           className="sidebar-nav-link"
-          style={{ color: '#f87171', width: '100%', textAlign: 'left' }}
+          style={{
+            color: '#fb7185',
+            width: '100%',
+            textAlign: 'left',
+            padding: '10px 16px',
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            borderRadius: '10px'
+          }}
         >
-          <i className="bi bi-box-arrow-right"></i>
-          <span>Logout</span>
+          <i className="bi bi-box-arrow-right" style={{ fontSize: '1.1rem' }}></i>
+          <span style={{ fontWeight: 500 }}>Logout</span>
         </button>
       </div>
     </div>

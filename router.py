@@ -80,6 +80,14 @@ def log_audit(action, username="system", details=""):
         print(f"Audit log error: {e}")
 
 
+def normalize_gender(g):
+    if not g: return "Male"
+    g_low = str(g).lower().strip()
+    if g_low in ["nam", "male"]: return "Male"
+    if g_low in ["nữ", "nu", "female"]: return "Female"
+    return "Other"
+
+
 # ============================================================
 # AUTH API: LOGIN – Returns JWT Token (FR13)
 # Đăng nhập bằng Email (ưu tiên) hoặc Username
@@ -91,7 +99,7 @@ def login():
     password = data.get('password', '')
 
     if not email_or_username or not password:
-        return jsonify({"status": "error", "msg": "Vui lòng nhập email và mật khẩu"}), 400
+        return jsonify({"status": "error", "msg": "Please enter email and password"}), 400
 
     try:
         auth = get_auth_connection()
@@ -104,13 +112,13 @@ def login():
         row = cur.fetchone()
 
         if not row:
-            return jsonify({"status": "error", "msg": "Email hoặc mật khẩu không đúng"}), 401
+            return jsonify({"status": "error", "msg": "Invalid email or password"}), 401
 
         user_id, db_username, email, pw_hash, role, failed, locked_until, employee_id = row
 
         # BR-21: Check account lock
         if locked_until and locked_until > datetime.now():
-            return jsonify({"status": "error", "msg": "Tài khoản đã bị khóa. Vui lòng thử lại sau."}), 423
+            return jsonify({"status": "error", "msg": "Account locked. Please try again later."}), 423
 
         if check_password_hash(pw_hash, password):
             # Reset failed attempts on success
@@ -155,14 +163,14 @@ def login():
             log_audit("LOGIN_FAILED", db_username, f"Attempt {new_failed}")
             msg = "Email hoặc mật khẩu không đúng"
             if new_failed >= 3:
-                msg = "Tài khoản đã bị khóa 15 phút sau 3 lần đăng nhập sai"
+                msg = "Account locked for 15 minutes after 3 failed login attempts"
             return jsonify({"status": "error", "msg": msg}), 401
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         print(f"[LOGIN ERROR DETAIL] SQL_SERVER={os.environ.get('SQL_SERVER')} AUTH_DB={os.environ.get('SQL_AUTH_DATABASE')} Error={e}")
-        return jsonify({"status": "error", "msg": "Lỗi máy chủ xác thực", "debug": str(e)}), 500
+        return jsonify({"status": "error", "msg": "Authentication server error", "debug": str(e)}), 500
 
 # ============================================================
 # NEW API: PAYROLL DATA
@@ -551,10 +559,10 @@ def change_password():
     new_password = data.get('new_password')
     
     if not username or not new_password or not current_password:
-        return jsonify({"status": "error", "msg": "Thiếu thông tin: cần username, current_password, new_password"}), 400
+        return jsonify({"status": "error", "msg": "Missing information: username, current_password, and new_password are required"}), 400
 
     if len(new_password) < 6:
-        return jsonify({"status": "error", "msg": "Mật khẩu mới phải có ít nhất 6 ký tự"}), 400
+        return jsonify({"status": "error", "msg": "New password must be at least 6 characters"}), 400
 
     try:
         auth = get_auth_connection()
@@ -565,17 +573,17 @@ def change_password():
         cur.execute("SELECT PasswordHash FROM SystemUsers WHERE Username = ?", (username,))
         row = cur.fetchone()
         if not row:
-            return jsonify({"status": "error", "msg": "Tài khoản không tồn tại"}), 404
+            return jsonify({"status": "error", "msg": "Account not found"}), 404
         if not check_password_hash(row[0], current_password):
-            return jsonify({"status": "error", "msg": "Mật khẩu hiện tại không đúng"}), 401
+            return jsonify({"status": "error", "msg": "Incorrect current password"}), 401
 
         hashed_password = generate_password_hash(new_password)
         cur.execute("UPDATE SystemUsers SET PasswordHash = ? WHERE Username = ?", (hashed_password, username))
         log_audit("PASSWORD_CHANGED", username, "User changed their own password")
-        return jsonify({"status": "success", "msg": "Đổi mật khẩu thành công"})
+        return jsonify({"status": "success", "msg": "Password changed successfully"})
     except Exception as e:
         print(f"Error in change_password: {e}")
-        return jsonify({"status": "error", "msg": "Lỗi đổi mật khẩu"}), 500
+        return jsonify({"status": "error", "msg": "Error changing password"}), 500
 
 # ============================================================
 # API: FORGOT PASSWORD – OTP 6 số (FR)
@@ -649,7 +657,7 @@ def forgot_password():
     data = request.json
     email = data.get('email', '').strip()
     if not email:
-        return jsonify({"status": "error", "msg": "Vui long nhap email"}), 400
+        return jsonify({"status": "error", "msg": "Please enter your email"}), 400
 
     try:
         auth = get_auth_connection()
@@ -660,7 +668,7 @@ def forgot_password():
         row = cur.fetchone()
         if not row:
             # Tra ve success de tranh lo email (security)
-            return jsonify({"status": "success", "msg": "Neu email ton tai, ma OTP se duoc gui."})
+            return jsonify({"status": "success", "msg": "If the email exists, an OTP will be sent."})
 
         user_id, username = row
 
@@ -682,18 +690,18 @@ def forgot_password():
         if email_sent:
             return jsonify({
                 "status": "success",
-                "msg": "Ma OTP 6 so da duoc gui den email cua ban. Vui long kiem tra hop thu.",
+                "msg": "A 6-digit OTP has been sent to your email. Please check your inbox.",
                 "otp_sent": True
             })
         else:
             return jsonify({
                 "status": "error",
-                "msg": "Khong the gui email. Vui long thu lai sau."
+                "msg": "Could not send email. Please try again later."
             }), 500
 
     except Exception as e:
         print(f"Error in forgot_password: {e}")
-        return jsonify({"status": "error", "msg": "Loi xu ly yeu cau"}), 500
+        return jsonify({"status": "error", "msg": "Error processing request"}), 500
 
 
 @router.route("/api/verify-otp", methods=["POST"])
@@ -704,7 +712,7 @@ def verify_otp():
     otp = data.get('otp', '').strip()
 
     if not email or not otp:
-        return jsonify({"status": "error", "msg": "Vui long nhap email va ma OTP"}), 400
+        return jsonify({"status": "error", "msg": "Please enter email and OTP code"}), 400
 
     try:
         auth = get_auth_connection()
@@ -718,7 +726,7 @@ def verify_otp():
         row = cur.fetchone()
 
         if not row:
-            return jsonify({"status": "error", "msg": "Email khong ton tai"}), 404
+            return jsonify({"status": "error", "msg": "Email not found"}), 404
 
         user_id, username, stored_otp, otp_expiry, otp_attempts = row
 
@@ -726,16 +734,16 @@ def verify_otp():
         if otp_attempts and otp_attempts >= 5:
             cur.execute("UPDATE SystemUsers SET OTPCode = NULL, OTPExpiry = NULL, OTPAttempts = 0 WHERE UserID = ?", (user_id,))
             log_audit("OTP_BLOCKED", username, "Too many failed OTP attempts")
-            return jsonify({"status": "error", "msg": "Qua nhieu lan nhap sai. Vui long yeu cau ma OTP moi."}), 429
+            return jsonify({"status": "error", "msg": "Too many failed attempts. Please request a new OTP."}), 429
 
         # Kiem tra OTP co ton tai khong
         if not stored_otp or not otp_expiry:
-            return jsonify({"status": "error", "msg": "Khong tim thay ma OTP. Vui long yeu cau ma moi."}), 400
+            return jsonify({"status": "error", "msg": "OTP not found. Please request a new one."}), 400
 
         # Kiem tra OTP het han
         if otp_expiry < datetime.now():
             cur.execute("UPDATE SystemUsers SET OTPCode = NULL, OTPExpiry = NULL, OTPAttempts = 0 WHERE UserID = ?", (user_id,))
-            return jsonify({"status": "error", "msg": "Ma OTP da het han. Vui long yeu cau ma moi."}), 400
+            return jsonify({"status": "error", "msg": "OTP has expired. Please request a new one."}), 400
 
         # Kiem tra OTP co dung khong
         if otp != stored_otp:
@@ -745,7 +753,7 @@ def verify_otp():
             log_audit("OTP_FAILED", username, f"Wrong OTP attempt {new_attempts}")
             return jsonify({
                 "status": "error", 
-                "msg": f"Ma OTP khong dung. Con {remaining} lan thu."
+                "msg": f"Invalid OTP code. {remaining} attempts remaining."
             }), 400
 
         # OTP dung! Tao reset token tam thoi de dung cho buoc doi mat khau
@@ -760,13 +768,13 @@ def verify_otp():
         log_audit("OTP_VERIFIED", username, "OTP verified successfully")
         return jsonify({
             "status": "success",
-            "msg": "Xac nhan OTP thanh cong!",
+            "msg": "OTP verified successfully!",
             "reset_token": reset_token
         })
 
     except Exception as e:
         print(f"Error in verify_otp: {e}")
-        return jsonify({"status": "error", "msg": "Loi xac nhan OTP"}), 500
+        return jsonify({"status": "error", "msg": "Error verifying OTP"}), 500
 
 
 @router.route("/api/reset-password", methods=["POST"])
@@ -777,10 +785,10 @@ def reset_password():
     new_password = data.get('new_password', '')
 
     if not reset_token or not new_password:
-        return jsonify({"status": "error", "msg": "Thieu thong tin"}), 400
+        return jsonify({"status": "error", "msg": "Missing information"}), 400
 
     if len(new_password) < 6:
-        return jsonify({"status": "error", "msg": "Mat khau phai co it nhat 6 ky tu"}), 400
+        return jsonify({"status": "error", "msg": "Password must be at least 6 characters"}), 400
 
     try:
         auth = get_auth_connection()
@@ -794,7 +802,7 @@ def reset_password():
         row = cur.fetchone()
 
         if not row:
-            return jsonify({"status": "error", "msg": "Phien da het han. Vui long thuc hien lai."}), 400
+            return jsonify({"status": "error", "msg": "Session expired. Please try again."}), 400
 
         user_id, username = row
         hashed = generate_password_hash(new_password)
@@ -808,11 +816,11 @@ def reset_password():
         """, (hashed, user_id))
 
         log_audit("PASSWORD_RESET_SUCCESS", username, "Password reset via OTP successfully")
-        return jsonify({"status": "success", "msg": "Doi mat khau thanh cong! Vui long dang nhap lai."})
+        return jsonify({"status": "success", "msg": "Password reset successfully! Please login again."})
 
     except Exception as e:
         print(f"Error in reset_password: {e}")
-        return jsonify({"status": "error", "msg": "Loi doi mat khau"}), 500
+        return jsonify({"status": "error", "msg": "Error resetting password"}), 500
 
 
 # ============================================================
@@ -885,7 +893,7 @@ def get_employees():
                 "EmployeeID": r[0],
                 "FullName": r[1],
                 "DateOfBirth": str(r[2]) if r[2] else None,
-                "Gender": r[3],
+                "Gender": normalize_gender(r[3]),
                 "PhoneNumber": r[4],
                 "Email": r[5],
                 "HireDate": str(r[6]) if r[6] else None,
@@ -926,7 +934,7 @@ def get_employee_detail(emp_id):
         return jsonify({
             "EmployeeID": r[0], "FullName": r[1], "Email": r[2],
             "DateOfBirth": str(r[3]) if r[3] else None,
-            "Gender": r[4], "PhoneNumber": r[5],
+            "Gender": normalize_gender(r[4]), "PhoneNumber": r[5],
             "HireDate": str(r[6]) if r[6] else None,
             "Status": r[7],
             "DepartmentID": r[8], "DepartmentName": r[9],
@@ -965,7 +973,7 @@ def add_employee():
         cur.execute("SELECT COUNT(*) FROM Employees WHERE Email = ?", (email,))
         if cur.fetchone()[0] > 0:
             sql.rollback()
-            return jsonify({"status": "error", "msg": "Email đã tồn tại"}), 400
+            return jsonify({"status": "error", "msg": "Email already exists"}), 400
 
         cur.execute("""
             INSERT INTO Employees
@@ -994,7 +1002,7 @@ def add_employee():
 
         return jsonify({
             "status": "success",
-            "msg": f"Thêm nhân viên thành công (ID = {new_id})"
+            "msg": f"Employee added successfully (ID = {new_id})"
         })
     except Exception as e:
         if sql:
@@ -1053,7 +1061,7 @@ def update_employee(emp_id):
         except Exception as mysql_err:
             print(f"[WARN] MySQL sync failed for update_employee {emp_id}: {mysql_err}")
 
-        return jsonify({"status": "success", "msg": "Update thành công"})
+        return jsonify({"status": "success", "msg": "Updated successfully"})
     except Exception as e:
         if sql:
             try: sql.rollback()
@@ -1080,7 +1088,7 @@ def delete_employee(emp_id):
         cur.execute("SELECT COUNT(*) FROM Dividends WHERE EmployeeID = ?", (emp_id,))
         if cur.fetchone()[0] > 0:
             sql.rollback()
-            return jsonify({"status": "error", "msg": "Khong the vo hieu hoa: Nhan vien co du lieu co tuc"}), 409
+            return jsonify({"status": "error", "msg": "Cannot deactivate: Employee has dividend records"}), 409
 
         # BR-05: Soft delete
         cur.execute("UPDATE Employees SET Status = 'Inactive' WHERE EmployeeID = ?", (emp_id,))
@@ -1101,7 +1109,7 @@ def delete_employee(emp_id):
 
         username = request.current_user.get('username', 'system')
         log_audit("EMPLOYEE_DEACTIVATED", username, f"Employee {emp_id} set to Inactive (BR-05 soft delete)")
-        return jsonify({"status": "success", "msg": "Nhan vien da duoc vo hieu hoa thanh cong"})
+        return jsonify({"status": "success", "msg": "Employee deactivated successfully"})
     except Exception as e:
         if sql:
             try: sql.rollback()
@@ -1109,32 +1117,9 @@ def delete_employee(emp_id):
         import traceback
         print(f"[ERROR] delete_employee {emp_id}: {e}")
         print(traceback.format_exc())
-        return jsonify({"status": "error", "msg": "Loi vo hieu hoa nhan vien", "debug": str(e)}), 500
+        return jsonify({"status": "error", "msg": "Error deactivating employee", "debug": str(e)}), 500
 
-# ============================================================
-# NEW API: DIVIDENDS DATA
-# ============================================================
-@router.route("/api/dividends")
-@require_auth(["Admin", "HR", "Payroll"])
-def get_dividends():
-    try:
-        sql = get_sqlserver_connection()
-        cur = sql.cursor()
-        cur.execute("""
-            SELECT e.FullName, d.DividendAmount AS Amount
-            FROM Dividends d
-            JOIN Employees e ON d.EmployeeID = e.EmployeeID
-        """)
-        rows = [
-            {"FullName": r[0], "Amount": float(r[1] or 0)}
-            for r in cur.fetchall()
-        ]
-        return jsonify(rows)
-    except Exception as e:
-        print(f"Error in get_dividends: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify([])
+# Deleted report_dividends since it's consolidated into get_dividends below
 
 @router.route("/api/dividends/summary")
 @require_auth(["Admin", "HR", "Payroll"])
@@ -1207,7 +1192,7 @@ def profile_handler():
         phone = data.get("PhoneNumber", "").strip()
 
         if not full_name:
-            return jsonify({"status": "error", "msg": "FullName không được để trống"}), 400
+            return jsonify({"status": "error", "msg": "Full Name cannot be empty"}), 400
 
         try:
             # 1. Update SQL Server Employees – tìm theo email
@@ -1231,10 +1216,10 @@ def profile_handler():
                 )
 
             log_audit("PROFILE_UPDATED", username, f"Updated FullName={full_name}, Phone={phone}")
-            return jsonify({"status": "success", "msg": "Cập nhật hồ sơ thành công"})
+            return jsonify({"status": "success", "msg": "Profile updated successfully"})
         except Exception as e:
             print(f"Error updating profile: {e}")
-            return jsonify({"status": "error", "msg": "Lỗi cập nhật hồ sơ"}), 500
+            return jsonify({"status": "error", "msg": "Error updating profile"}), 500
 
 
 # ============================================================
@@ -1363,44 +1348,54 @@ def report_attendance():
         print(f"Error report_attendance: {e}")
         return jsonify([])
 
-@router.route("/api/reports/dividends")
+@router.route("/api/dividends")
 @require_auth(["Admin", "HR", "Payroll"])
-def report_dividends():
+def get_dividends():
     try:
         sql = get_sqlserver_connection()
         cur = sql.cursor()
 
-        cur.execute("""
+        cur.execute("SELECT DB_NAME()")
+        db_name = cur.fetchone()[0]
+        print(f"[DEBUG] Current database inside Flask: {db_name}")
+
+        query = """
             SELECT 
-                e.FullName,
+                d.DividendID,
+                d.EmployeeID,
+                COALESCE(e.FullName, CONCAT('Employee #', d.EmployeeID)) AS FullName,
                 COALESCE(d.DividendAmount, 0) AS Amount,
                 d.DividendDate
             FROM Dividends d
-            JOIN Employees e ON d.EmployeeID = e.EmployeeID
+            LEFT JOIN Employees e ON d.EmployeeID = e.EmployeeID
             ORDER BY d.DividendAmount DESC
-        """)
+        """
+        cur.execute(query)
 
-        data = [
-            {
-                "FullName": row[0],
-                "Amount": float(row[1] or 0),
-                "DividendDate": row[2].strftime("%Y-%m-%d") if row[2] else None
-            }
-            for row in cur.fetchall()
-        ]
+        rows = cur.fetchall()
+        print(f"[DEBUG] /api/dividends found {len(rows)} rows")
+
+        data = []
+        for row in rows:
+            data.append({
+                "FullName": row[2],
+                "Amount": float(row[3] or 0),
+                "DividendDate": str(row[4]) if row[4] else None
+            })
+
+        print(f"[DEBUG] /api/dividends processed {len(data)} items to JSON")
 
         cur.close()
         sql.close()
-
         return jsonify(data)
 
     except Exception as e:
-        print(f"Error report_dividends: {e}")
+        print(f"[ERROR] get_dividends: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify([])
+        return jsonify({"error": str(e)}), 500
 
-
+        
 # ============================================================
 # API: AUDIT LOGS (FR15)
 # ============================================================

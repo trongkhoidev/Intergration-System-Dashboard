@@ -5,6 +5,8 @@ import { API_BASE, fetchAuth } from '../api';
 import { Link } from 'react-router-dom';
 import { getCurrentUser } from '../utils/auth';
 import { getStatusPresentation } from '../utils/status';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -13,12 +15,11 @@ function StatusBadge({ status }) {
   return <span className={`badge ${presentation.className}`}>{presentation.label}</span>;
 }
 
-function StatCard({ title, value, icon, gradient, sub, subIcon }) {
+function StatCard({ title, value, icon, theme, sub, subIcon }) {
   return (
-    <div className="card border-0 p-4 h-100 shadow-sm overflow-hidden position-relative">
-      <div style={{ position: 'absolute', top: '-10px', right: '-10px', width: '80px', height: '80px', background: gradient, opacity: 0.1, borderRadius: '50%' }}></div>
+    <div className={`card stat-card stat-card-vivid ${theme} border-0 p-4 h-100 shadow-sm overflow-hidden position-relative`}>
       <div className="d-flex align-items-center gap-3 mb-3">
-        <div className="stat-card-icon shadow-sm" style={{ background: gradient, color: '#fff', width: 48, height: 48, borderRadius: 12 }}>
+        <div className="stat-card-icon shadow-sm" style={{ width: 48, height: 48, borderRadius: 12 }}>
           <i className={`bi ${icon}`} style={{ fontSize: '1.4rem' }}></i>
         </div>
         <div>
@@ -26,13 +27,15 @@ function StatCard({ title, value, icon, gradient, sub, subIcon }) {
           <div className="stat-card-value" style={{ fontSize: '1.75rem' }}>{value}</div>
         </div>
       </div>
-      <div className="d-flex align-items-center gap-1 mt-auto">
-        <span className={`small fw-bold ${sub.includes('+') ? 'text-success' : 'text-muted'}`}>
-          <i className={`bi ${subIcon} me-1`}></i>
-          {sub}
-        </span>
-        <span className="small text-light opacity-75">vs last month</span>
-      </div>
+      {sub && (
+        <div className="d-flex align-items-center gap-1 mt-auto">
+          <span className={`small ${sub.includes('+') ? 'trend-up' : (sub.includes('-') ? 'trend-down' : 'trend-label')}`}>
+            <i className={`bi ${subIcon} me-1`}></i>
+            {sub}
+          </span>
+          <span className="small trend-label">vs last month</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -132,7 +135,7 @@ export default function Dashboard() {
     labels: payrollBreakdown.labels,
     datasets: [{
       data: payrollBreakdown.data,
-      backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+      backgroundColor: ['#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
       borderWidth: 0,
       hoverOffset: 15,
       weight: 0.5
@@ -145,11 +148,79 @@ export default function Dashboard() {
       label: 'Employees',
       data: statusData.data,
       backgroundColor: statusData.labels.map(l => 
-        l === 'Active' ? '#10b981' : l === 'On Leave' ? '#f59e0b' : l === 'Inactive' ? '#ef4444' : '#3b82f6'
+        l === 'Active' ? '#10b981' : 
+        l === 'On Leave' ? '#f59e0b' : 
+        l === 'Inactive' ? '#ef4444' : 
+        l === 'Probation' ? '#ec4899' : '#3b82f6'
       ),
       borderRadius: 6,
       barThickness: 30
     }]
+  };
+
+  const formatVND = (value) => {
+    const number = Number(value || 0);
+    return `${number.toLocaleString('vi-VN')} VND`;
+  };
+
+  const removeDiacritics = (str) => {
+    if (!str) return '';
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(15, 23, 42); // Dark Navy
+    doc.text('Executive Dashboard Report', 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+
+    // Summary KPIs
+    doc.setFontSize(14);
+    doc.setTextColor(59, 130, 246);
+    doc.text('System Summary', 14, 45);
+    
+    autoTable(doc, {
+      startY: 50,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Total Employees', stats.totalEmployees?.toLocaleString() || '0'],
+        ['Total Payroll', formatVND(stats.payrollTotal)],
+        ['Attendance Rate', `${stats.attendanceRate}%`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    // Recent Activities Table
+    doc.setFontSize(14);
+    doc.setTextColor(59, 130, 246);
+    doc.text('Recent Activities', 14, doc.lastAutoTable.finalY + 15);
+
+    const tableData = recentEmployees.map(emp => [
+      removeDiacritics(emp.FullName),
+      removeDiacritics(emp.Department || 'N/A'),
+      removeDiacritics(emp.Position || 'Staff'),
+      removeDiacritics(getStatusPresentation(emp.Status).label)
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 20,
+      head: [['Employee Name', 'Department', 'Role', 'Status']],
+      body: tableData,
+      headStyles: { fillColor: [15, 23, 42] },
+    });
+
+    doc.save('executive_dashboard_report.pdf');
   };
 
   return (
@@ -161,7 +232,12 @@ export default function Dashboard() {
         </div>
         <div className="d-flex gap-2">
           <button className="btn btn-outline bg-white"><i className="bi bi-calendar3 me-2"></i> Last 30 Days</button>
-          <button className="btn btn-primary shadow-sm"><i className="bi bi-download me-2"></i> Export Report</button>
+          <button 
+            className="btn btn-primary shadow-sm"
+            onClick={handleExportPDF}
+          >
+            <i className="bi bi-download me-2"></i> Export Report
+          </button>
         </div>
       </div>
 
@@ -172,17 +248,15 @@ export default function Dashboard() {
             title="Total Employees" 
             value={loading ? '...' : stats.totalEmployees?.toLocaleString()} 
             icon="bi-people-fill" 
-            gradient="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
-            sub="+4.2%" subIcon="bi-graph-up-arrow"
+            theme="stat-card-pink"
           />
         </div>
         <div className="col-lg-4 col-md-6">
           <StatCard 
             title="Total Payroll" 
-            value={loading ? '...' : `$${(stats.payrollTotal / 1000).toFixed(1)}k`} 
+            value={loading ? '...' : formatVND(stats.payrollTotal)} 
             icon="bi-wallet2" 
-            gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
-            sub="+1.8%" subIcon="bi-graph-up-arrow"
+            theme="stat-card-green"
           />
         </div>
         <div className="col-lg-4 col-md-6">
@@ -190,8 +264,7 @@ export default function Dashboard() {
             title="Attendance Rate" 
             value={loading ? '...' : `${stats.attendanceRate}%`} 
             icon="bi-clock-history" 
-            gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
-            sub="-0.5%" subIcon="bi-graph-down-arrow"
+            theme="stat-card-amber"
           />
         </div>
       </div>
@@ -219,7 +292,7 @@ export default function Dashboard() {
               {!loading && (
                 <div className="position-absolute top-50 start-50 translate-middle text-center">
                   <div className="text-muted small">Total</div>
-                  <div className="fw-bold h4 m-0">${(stats.payrollTotal / 1000).toFixed(1)}k</div>
+                  <div className="fw-bold h6 m-0">{formatVND(stats.payrollTotal)}</div>
                 </div>
               )}
             </div>

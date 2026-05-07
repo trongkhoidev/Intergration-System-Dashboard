@@ -78,51 +78,66 @@ export default function Payroll() {
     }
   };
 
+  const formatVND = (value) => {
+    const number = Number(value || 0);
+    return `${number.toLocaleString('vi-VN')} VND`;
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="page-header mb-4">
         <div>
           <h1 className="page-title">Payroll Management</h1>
-          <p className="page-subtitle">Oversee salary distributions, bonuses, and deductions</p>
+          <p className="page-subtitle">Process and track employee compensation</p>
         </div>
         <div className="d-flex gap-2">
-          <button className="btn btn-outline" onClick={() => setIsExportModalOpen(true)}>
-            <i className="bi bi-download me-2"></i> Export PDF
+          <button className="btn btn-outline" onClick={loadData}>
+            <i className="bi bi-arrow-clockwise"></i>
           </button>
-          <button className="btn btn-primary shadow-sm"><i className="bi bi-plus-circle me-2"></i> Generate Payroll</button>
+          <button className="btn btn-primary">
+            <i className="bi bi-plus-circle me-2"></i> Run New Payroll
+          </button>
         </div>
       </div>
 
       <div className="row g-4 mb-4">
-        <div className="col-lg-3">
-          <div className="stat-card">
-            <div className="stat-card-label">Total Distribution</div>
-            <div
-              className="stat-card-value text-primary"
-              style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', wordBreak: 'break-all', lineHeight: 1.2 }}
-            >
-              ${summary.TotalPayroll ? Number(summary.TotalPayroll).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}
+        <div className="col-lg-4">
+          <div className="stat-card stat-card-vivid stat-card-blue animate-in" style={{ animationDelay: '0.1s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Total Distribution</div>
+                <div className="stat-card-value" style={{ fontSize: '1.75rem' }}>
+                  {formatVND(summary.TotalPayroll)}
+                </div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-cash-stack"></i>
+              </div>
             </div>
-            <div className="small text-muted mt-1"><i className="bi bi-arrow-up text-success me-1"></i>+2.5% from last month</div>
+            <div className="small text-muted mt-2"><i className="bi bi-arrow-up text-success me-1"></i>+2.5% vs last month</div>
           </div>
         </div>
-        <div className="col-lg-3">
-          <div className="stat-card">
-            <div className="stat-card-label">Average Salary</div>
-            <div
-              className="stat-card-value text-success"
-              style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', wordBreak: 'break-all', lineHeight: 1.2 }}
-            >
-              ${summary.AvgSalary ? Number(summary.AvgSalary).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}
+        <div className="col-lg-4">
+          <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.2s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Average Salary</div>
+                <div className="stat-card-value" style={{ fontSize: '1.75rem' }}>
+                  {formatVND(summary.AvgSalary)}
+                </div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-graph-up"></i>
+              </div>
             </div>
-            <div className="small text-muted mt-1">Based on {payrollData.length} records</div>
+            <div className="small text-muted mt-2">Based on {payrollData.length} records</div>
           </div>
         </div>
-        <div className="col-lg-6">
-          <div className="card h-100 p-3 border-0 shadow-sm">
+        <div className="col-lg-4">
+          <div className="card border-0 p-4 h-100 shadow-sm animate-in" style={{ animationDelay: '0.3s' }}>
             <div className="d-flex justify-content-between align-items-center mb-2">
               <span className="small fw-bold text-muted text-uppercase">Salary Trend</span>
-              <span className="badge bg-primary-light text-primary">Last 10 Cycles</span>
+              <span className="badge badge-pink">Last 10 Cycles</span>
             </div>
             <div style={{ height: '80px' }}>
               <Line data={lineData} options={chartOptions} />
@@ -187,13 +202,13 @@ export default function Payroll() {
                       <div className="fw-bold text-dark">{p.FullName}</div>
                       <div className="small text-muted">{p.MonthYear} {p.DepartmentName ? `• ${p.DepartmentName}` : ''}</div>
                     </td>
-                    <td><span className="fw-600 text-dark">${p.BaseSalary?.toLocaleString()}</span></td>
-                    <td><span className="text-success fw-600">+$ {p.Bonus?.toLocaleString()}</span></td>
-                    <td><span className="text-danger fw-600">-$ {p.Deductions?.toLocaleString()}</span></td>
+                    <td><span className="fw-600 text-dark">{formatVND(p.BaseSalary)}</span></td>
+                    <td><span className="text-success fw-600">+{formatVND(p.Bonus)}</span></td>
+                    <td><span className="text-danger fw-600">-{formatVND(p.Deductions)}</span></td>
                     <td>
                       <div className="d-flex align-items-center gap-2">
-                        <span className="fw-bold text-primary fs-6">${p.TotalSalary?.toLocaleString()}</span>
-                        {p.TotalSalary > 5000 && <i className="bi bi-lightning-fill text-warning small"></i>}
+                        <span className="fw-bold text-primary fs-6">{formatVND(p.TotalSalary)}</span>
+                        {p.TotalSalary > 100000000 && <i className="bi bi-lightning-fill text-warning small"></i>}
                       </div>
                     </td>
                     <td className="text-end">

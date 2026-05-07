@@ -153,29 +153,55 @@ export default function PayrollReport({ setExportFunctions }) {
   return (
     <div className="payroll-report">
       {/* KPIs */}
-      <div className="row g-3 mb-4">
+      <div className="row g-4 mb-4">
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2">Total Net (Latest Month)</h6>
-            <h3 className="mb-0 fw-bold text-primary">
-              {formatVND(lastMonthData.TotalNet)}
-            </h3>
+          <div className="stat-card stat-card-vivid stat-card-blue animate-in" style={{ animationDelay: '0.1s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Total Net (Latest Month)</div>
+                <div className="stat-card-value">
+                  {formatVND(lastMonthData.TotalNet)}
+                </div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-wallet2"></i>
+              </div>
+            </div>
+            <div className="small text-muted mt-2">Current period payout</div>
           </div>
         </div>
 
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2">Avg Monthly Payroll</h6>
-            <h3 className="mb-0 fw-bold">{formatVND(avgMonthlyNet)}</h3>
+          <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.2s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Avg Monthly Payroll</div>
+                <div className="stat-card-value">
+                  {formatVND(avgMonthlyNet)}
+                </div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-calculator"></i>
+              </div>
+            </div>
+            <div className="small text-muted mt-2">Overall monthly average</div>
           </div>
         </div>
 
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm p-3 text-center h-100">
-            <h6 className="text-muted mb-2 text-success">Bonus (Latest Month)</h6>
-            <h3 className="mb-0 fw-bold text-success">
-              {formatVND(lastMonthData.TotalBonus)}
-            </h3>
+          <div className="stat-card stat-card-vivid stat-card-green animate-in" style={{ animationDelay: '0.3s' }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="stat-card-label">Bonus (Latest Month)</div>
+                <div className="stat-card-value">
+                  {formatVND(lastMonthData.TotalBonus)}
+                </div>
+              </div>
+              <div className="stat-card-icon">
+                <i className="bi bi-gift"></i>
+              </div>
+            </div>
+            <div className="small text-muted mt-2">Incentives distributed</div>
           </div>
         </div>
       </div>
@@ -187,35 +213,8 @@ export default function PayrollReport({ setExportFunctions }) {
         </div>
       ) : (
         <div className="row g-4">
-          <div className="col-lg-12">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h6 className="fw-bold mb-4 text-muted text-uppercase ls-1">
-                  Payroll Trend Analytics
-                </h6>
-
-                <div style={{ height: '300px' }}>
-                  <Line
-                    data={{
-                      labels,
-                      datasets: [
-                        {
-                          label: 'Total Net Salary',
-                          data: netData,
-                          borderColor: '#10b981',
-                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                          borderWidth: 3,
-                        },
-                      ],
-                    }}
-                    options={chartOptions}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Trend Analytics Chart Removed per user request */}
+          
 
           <div className="col-lg-12">
             <div className="card border-0 shadow-sm">
