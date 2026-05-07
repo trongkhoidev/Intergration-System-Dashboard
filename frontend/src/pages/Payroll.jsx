@@ -90,14 +90,6 @@ export default function Payroll() {
           <h1 className="page-title">Payroll Management</h1>
           <p className="page-subtitle">Process and track employee compensation</p>
         </div>
-        <div className="d-flex gap-2">
-          <button className="btn btn-outline" onClick={loadData}>
-            <i className="bi bi-arrow-clockwise"></i>
-          </button>
-          <button className="btn btn-primary">
-            <i className="bi bi-plus-circle me-2"></i> Run New Payroll
-          </button>
-        </div>
       </div>
 
       <div className="row g-4 mb-4">
