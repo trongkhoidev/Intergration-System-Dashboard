@@ -101,7 +101,7 @@ export default function Attendance() {
                   <i className="bi bi-person-check-fill"></i>
                 </div>
               </div>
-              <div className="small text-muted mt-2"><i className="bi bi-caret-up-fill text-success me-1"></i>0.5% vs last month</div>
+              
             </div>
             
             <div className="stat-card stat-card-vivid stat-card-pink animate-in" style={{ animationDelay: '0.2s' }}>

@@ -106,7 +106,6 @@ export default function Payroll() {
                 <i className="bi bi-cash-stack"></i>
               </div>
             </div>
-            <div className="small text-muted mt-2"><i className="bi bi-arrow-up text-success me-1"></i>+2.5% vs last month</div>
           </div>
         </div>
         <div className="col-lg-4">
