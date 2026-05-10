@@ -19,13 +19,13 @@ fi
 
 # 2. Install Backend Dependencies
 echo "📦 Installing Backend Dependencies..."
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # 3. Initialize Databases
 echo "🗄️ Setting up Databases (SQL Server & MySQL)..."
-python init_db.py
+python backend/init_db.py
 echo "🔏 Setting up Auth & Syncing Users..."
-python setup_auth.py
+python backend/setup_auth.py
 
 # 4. Install Frontend Dependencies
 if [ ! -d "frontend/node_modules" ]; then
@@ -58,7 +58,7 @@ sleep 1
 
 # 6. Start Servers
 echo "📦 Starting Backend Server (Flask)..."
-python app.py &
+python backend/app.py &
 BACKEND_PID=$!
 
 echo "⚛️ Starting Frontend Server (React)..."

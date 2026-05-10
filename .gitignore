@@ -29,5 +29,8 @@ Thumbs.db
 *.pdf
 *.png
 init_schema_*.sql
-docs/ai/
+docs/
 .agent/
+MASTER_DATABASE_SCHEMA.sql
+split_router.py
+split.py

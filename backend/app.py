@@ -2,12 +2,16 @@ from flask import Flask
 from flask_cors import CORS
 import os
 
-from router import router
+from routes import auth_router, employees_router, payroll_router, dashboard_router, admin_router
 
 app = Flask(__name__)
 CORS(app)
 
-app.register_blueprint(router)
+app.register_blueprint(auth_router)
+app.register_blueprint(employees_router)
+app.register_blueprint(payroll_router)
+app.register_blueprint(dashboard_router)
+app.register_blueprint(admin_router)
 
 
 @app.route("/")

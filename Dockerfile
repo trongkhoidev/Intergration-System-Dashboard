@@ -18,14 +18,14 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # 3. Copy file requirements và cài đặt Python packages
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 4. Copy toàn bộ source code Backend vào Container
-COPY . .
+COPY backend/ ./backend/
 
 # 5. Khai báo Port
 EXPOSE $PORT
 
 # 6. Chạy ứng dụng bằng Gunicorn (Railway sẽ tự động cung cấp biến môi trường $PORT)
-CMD gunicorn app:app --bind 0.0.0.0:$PORT
+CMD cd backend && gunicorn app:app --bind 0.0.0.0:$PORT

@@ -15,12 +15,12 @@ echo Activating .venv...
 call .venv\Scripts\activate.bat
 
 echo [2/5] Installing Backend Dependencies...
-pip install -r requirements.txt
+pip install -r backend\requirements.txt
 
 echo [3/5] Setting up Databases (SQL Server ^& MySQL)...
-python init_db.py
+python backend\init_db.py
 echo Setting up Auth and Syncing Users...
-python setup_auth.py
+python backend\setup_auth.py
 
 echo [4/5] Installing Frontend Dependencies...
 if not exist "frontend\node_modules\" (
@@ -36,7 +36,7 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":3000" ^| find "LISTENING"') do
 
 echo.
 echo Starting Backend Server (Flask)...
-start /b "Backend (Flask)" cmd /c "call .venv\Scripts\activate.bat && python app.py"
+start /b "Backend (Flask)" cmd /c "call .venv\Scripts\activate.bat && python backend\app.py"
 
 echo Starting Frontend Server (React)...
 start /b "Frontend (React)" cmd /c "cd frontend && npm run dev"
